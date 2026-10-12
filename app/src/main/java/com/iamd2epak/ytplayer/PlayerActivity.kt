@@ -21,6 +21,7 @@ import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import android.widget.FrameLayout
+import android.widget.LinearLayout
 import android.widget.Toast
 import androidx.annotation.OptIn
 import androidx.media3.common.util.UnstableApi
@@ -64,6 +65,10 @@ class PlayerActivity : Activity() {
     private var fullscreen = false
     private var pageReady = false
     @Volatile private var pageHtml = ""
+    private var pendingMessage: String? = null   // status/error raised before the page finished loading
+    private lateinit var root: LinearLayout
+    private lateinit var playerBox: FrameLayout
+    private lateinit var below: FrameLayout
 
     @SuppressLint("SetJavaScriptEnabled")
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -132,7 +137,8 @@ class PlayerActivity : Activity() {
             override fun onPageFinished(view: WebView, url: String) {
                 if (url != PAGE_URL || pageReady) return
                 pageReady = true
-                if (mode == "native") startStream()
+                pendingMessage?.let { js(it) }
+                pendingMessage = null
             }
         }
         web.webChromeClient = object : WebChromeClient() {
@@ -140,14 +146,58 @@ class PlayerActivity : Activity() {
         }
         web.addJavascriptInterface(Bridge(), "Android")
 
-        val root = FrameLayout(this).apply { setBackgroundColor(Color.BLACK) }
+        // Portrait: 16:9 player at the top, free area below (for future content).
+        // Landscape / fullscreen: player fills the screen.
         val match = ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
-        root.addView(playerView, match)
-        root.addView(web, match)
+        playerBox = FrameLayout(this).apply {
+            setBackgroundColor(Color.BLACK)
+            addView(playerView, match)
+            addView(web, match)
+        }
+        below = FrameLayout(this).apply { setBackgroundColor(Color.parseColor("#121212")) }
+        root = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setBackgroundColor(Color.BLACK)
+            addView(playerBox, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0))
+            addView(below, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
+        }
+        root.setOnApplyWindowInsetsListener { v, insets ->
+            // Keep the portrait player below the status bar; landscape uses the whole screen.
+            if (isLandscape()) v.setPadding(0, 0, 0, 0)
+            else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                val bars = insets.getInsets(WindowInsets.Type.systemBars())
+                v.setPadding(0, bars.top, 0, bars.bottom)
+            } else {
+                @Suppress("DEPRECATION")
+                v.setPadding(0, insets.systemWindowInsetTop, 0, insets.systemWindowInsetBottom)
+            }
+            insets
+        }
         setContentView(root)
-        applySystemUi()
+        applyLayout()
 
         loadPage("native")
+        startStream() // fetch streams while the page loads: faster start
+    }
+
+    private fun isLandscape() = resources.configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
+
+    private fun applyLayout() {
+        val landscape = isLandscape()
+        fullscreen = landscape
+        val lp = playerBox.layoutParams as LinearLayout.LayoutParams
+        if (landscape) {
+            lp.height = ViewGroup.LayoutParams.MATCH_PARENT
+            lp.weight = 1f
+            below.visibility = View.GONE
+        } else {
+            lp.height = resources.displayMetrics.widthPixels * 9 / 16
+            lp.weight = 0f
+            below.visibility = View.VISIBLE
+        }
+        playerBox.layoutParams = lp
+        applySystemUi()
+        root.requestApplyInsets()
     }
 
     private fun savedPosition(): Double = getSharedPreferences(PREFS, MODE_PRIVATE).getFloat(videoId, 0f).toDouble()
@@ -167,9 +217,9 @@ class PlayerActivity : Activity() {
     private fun startStream() {
         stream?.release()
         stream = StreamPlayer(this, playerView, videoId, object : StreamPlayer.Listener {
-            override fun onStatus(text: String) = js("window.nativeStatus&&nativeStatus(${JSONObject.quote(text)})")
+            override fun onStatus(text: String) = jsOrQueue("window.nativeStatus&&nativeStatus(${JSONObject.quote(text)})")
             override fun onState(json: String) = js("window.nativeState&&nativeState($json)")
-            override fun onError(message: String) = js("window.nativeError&&nativeError(${JSONObject.quote(message)})")
+            override fun onError(message: String) = jsOrQueue("window.nativeError&&nativeError(${JSONObject.quote(message)})")
             override fun onSaveProgress(positionSec: Double, durationSec: Double) = saveProgress(positionSec, durationSec)
             override fun onFallbackToEmbed(positionSec: Double) = switchToEmbed(positionSec)
         }).also { it.start(savedPosition()) }
@@ -186,6 +236,11 @@ class PlayerActivity : Activity() {
 
     private fun js(code: String) {
         if (pageReady && !isFinishing) web.evaluateJavascript(code, null)
+    }
+
+    /** Messages must not be lost if they happen before the page is ready. */
+    private fun jsOrQueue(code: String) {
+        if (pageReady) js(code) else pendingMessage = code
     }
 
     private fun saveProgress(current: Double, duration: Double) {
@@ -239,32 +294,38 @@ class PlayerActivity : Activity() {
     private fun setFullscreen(on: Boolean) {
         fullscreen = on
         requestedOrientation = if (on) ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
-        else ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+        else ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
         js("window.setFullscreenIcon&&setFullscreenIcon($on)")
     }
 
     override fun onConfigurationChanged(newConfig: Configuration) {
         super.onConfigurationChanged(newConfig)
-        fullscreen = newConfig.orientation == Configuration.ORIENTATION_LANDSCAPE
+        applyLayout()
         js("window.setFullscreenIcon&&setFullscreenIcon($fullscreen)")
-        applySystemUi()
     }
 
+    /** Immersive (no status/nav bars) only in fullscreen landscape. */
     @Suppress("DEPRECATION")
     private fun applySystemUi() {
+        val immersive = isLandscape()
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
             window.setDecorFitsSystemWindows(false)
             window.insetsController?.let {
-                it.hide(WindowInsets.Type.systemBars())
-                it.systemBarsBehavior = WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+                if (immersive) {
+                    it.hide(WindowInsets.Type.systemBars())
+                    it.systemBarsBehavior = WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+                } else {
+                    it.show(WindowInsets.Type.systemBars())
+                }
             }
         } else {
-            window.decorView.systemUiVisibility = (View.SYSTEM_UI_FLAG_FULLSCREEN
+            window.decorView.systemUiVisibility = if (immersive) (View.SYSTEM_UI_FLAG_FULLSCREEN
                 or View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
                 or View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
                 or View.SYSTEM_UI_FLAG_LAYOUT_STABLE
                 or View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
                 or View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN)
+            else (View.SYSTEM_UI_FLAG_LAYOUT_STABLE or View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN)
         }
     }
 

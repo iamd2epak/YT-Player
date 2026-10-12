@@ -1,5 +1,6 @@
 package com.iamd2epak.ytplayer
 
+import android.app.ActivityManager
 import android.content.Context
 import android.net.ConnectivityManager
 import android.net.Network
@@ -63,9 +64,20 @@ class StreamPlayer(
 
     private val main = Handler(Looper.getMainLooper())
     private val worker = Executors.newSingleThreadExecutor()
+
+    /** ~4 GB RAM or less (or Android "low RAM"): keep Auto at 720p and use smaller buffers. */
+    private val lowEnd: Boolean = run {
+        val am = context.getSystemService(ActivityManager::class.java)
+        val mem = ActivityManager.MemoryInfo().also { am?.getMemoryInfo(it) }
+        am?.isLowRamDevice == true || mem.totalMem in 1..4_500_000_000L
+    }
+    private val autoMax = if (lowEnd) 720 else 1080
+
     private val trackSelector = DefaultTrackSelector(context).apply {
         parameters = buildUponParameters()
-            .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, true) // never show captions
+            .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, true)          // never show captions
+            .setPreferredVideoMimeTypes(MimeTypes.VIDEO_H264)       // hardware decoding on every phone
+            .setMaxVideoSize(Int.MAX_VALUE, autoMax)                // Auto never picks heavy 1440p/4K
             .build()
     }
     private val dataSource = YouTubeDataSource.Factory()
@@ -74,7 +86,7 @@ class StreamPlayer(
         .setTrackSelector(trackSelector)
         .setLoadControl(
             DefaultLoadControl.Builder()
-                .setBufferDurationsMs(20_000, 60_000, 1_000, 2_000)
+                .setBufferDurationsMs(15_000, if (lowEnd) 30_000 else 50_000, 1_000, 2_000)
                 .build()
         )
         .setAudioAttributes(
@@ -320,7 +332,7 @@ class StreamPlayer(
         return separateVideos.firstOrNull { shortSide(it) <= cap } ?: separateVideos.last()
     }
 
-    private var autoCap = 1080
+    private var autoCap = autoMax
 
     private fun onStall() {
         if (plans.getOrNull(planIndex) != Plan.SEPARATE || selectedQuality != "auto") return
@@ -342,7 +354,7 @@ class StreamPlayer(
         when (plans.getOrNull(planIndex)) {
             Plan.HLS -> applyHlsQuality()
             Plan.SEPARATE -> {
-                if (id == "auto") autoCap = 1080
+                if (id == "auto") autoCap = autoMax
                 val wasPlaying = player.playWhenReady
                 playCurrentPlan(positionSec())
                 player.playWhenReady = wasPlaying
@@ -409,8 +421,10 @@ class StreamPlayer(
             Plan.SEPARATE -> separateVideos.map { shortSide(it) }
             else -> emptyList()
         }
-        if (sides.isEmpty()) return emptyList()
-        return listOf("auto" to "Auto") + sides.map { it.toString() to "${it}p" }
+        val maxOffered = if (lowEnd) 1080 else 2160 // 1440p/4K would stutter on low-end phones
+        val offered = sides.filter { it <= maxOffered }
+        if (offered.isEmpty()) return emptyList()
+        return listOf("auto" to "Auto") + offered.map { it.toString() to "${it}p" }
     }
 
     // ------------------------------------------------------------------ controls
@@ -446,7 +460,7 @@ class StreamPlayer(
             if (released) return
             pushState()
             save(force = false)
-            main.postDelayed(this, 250)
+            main.postDelayed(this, 500) // page interpolates between updates
         }
     }
 

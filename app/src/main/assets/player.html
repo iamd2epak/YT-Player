@@ -28,11 +28,12 @@
   #ui.off { opacity: 0; }
   #ui.off * { pointer-events: none !important; }
   .grad-top, .grad-bot { position: absolute; left: 0; right: 0; }
-  .grad-top { top: 0; height: 80px; background: linear-gradient(rgba(0,0,0,.75), transparent); }
-  .grad-bot { bottom: 0; height: 130px; background: linear-gradient(transparent, rgba(0,0,0,.85)); }
+  .grad-top { top: 0; height: 64px; background: linear-gradient(rgba(0,0,0,.65), transparent); }
+  .grad-bot { bottom: 0; height: 72px; background: linear-gradient(transparent, rgba(0,0,0,.75)); }
 
-  #title { position: absolute; top: 14px; left: 18px; right: 18px; font-size: 16px; font-weight: 500;
-           white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-shadow: 0 1px 3px #000; }
+  #time { position: absolute; top: 12px; left: 12px; font-size: 12px; font-weight: 500;
+          font-variant-numeric: tabular-nums; text-shadow: 0 1px 2px #000; }
+  #topRight { position: absolute; top: 6px; right: 8px; display: flex; gap: 6px; }
 
   #center { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
             display: flex; align-items: center; gap: 44px; }
@@ -46,8 +47,9 @@
   .btn.lg { width: 72px; height: 72px; }
   .btn.lg svg { width: 42px; height: 42px; }
 
-  #bottom { position: absolute; left: 0; right: 0; bottom: 0; padding: 0 14px 8px; }
-  #barRow { display: flex; align-items: center; }
+  /* One line: seek bar + fullscreen */
+  #bottom { position: absolute; left: 0; right: 0; bottom: 0; padding: 0 4px 2px 12px;
+            display: flex; align-items: center; gap: 4px; }
   #bar { flex: 1; position: relative; height: 30px; pointer-events: auto; touch-action: none; }
   #bar .track, #bar .buf, #bar .prog { position: absolute; left: 0; top: 13px; height: 4px; border-radius: 2px; }
   #bar .track { right: 0; background: rgba(255,255,255,.25); }
@@ -57,31 +59,43 @@
                border-radius: 50%; background: #e53935; left: 0; transition: transform .1s; }
   #bar.drag .knob { transform: scale(1.4); }
 
-  #ctrlRow { display: flex; align-items: center; gap: 8px; height: 40px; }
-  #time { font-size: 13px; font-variant-numeric: tabular-nums; flex: 1; text-shadow: 0 1px 2px #000; }
-  .chip { pointer-events: auto; height: 34px; padding: 0 12px; border-radius: 17px; border: 0;
-          background: rgba(255,255,255,.16); color: #fff; font-size: 13px; font-weight: 600;
-          display: flex; align-items: center; gap: 6px; }
-  .chip svg { width: 18px; height: 18px; fill: #fff; }
+  .chip { pointer-events: auto; height: 30px; padding: 0 10px; border-radius: 15px; border: 0;
+          background: rgba(0,0,0,.45); color: #fff; font-size: 12px; font-weight: 600;
+          display: flex; align-items: center; gap: 5px; }
+  .chip svg { width: 16px; height: 16px; fill: #fff; }
   .chip:active { background: rgba(255,255,255,.3); }
   .chip.icon { width: 40px; padding: 0; justify-content: center; background: transparent; }
   .chip.icon svg { width: 26px; height: 26px; }
 
-  /* ---------- Settings sheet ---------- */
-  #sheetBg { z-index: 40; background: rgba(0,0,0,.55); display: none; }
-  #sheetBg.show { display: block; }
-  #sheet { position: absolute; left: 50%; bottom: 0; transform: translateX(-50%);
-           width: 100%; max-width: 520px; max-height: 92%; overflow-y: auto; background: #1c1c1e;
-           border-radius: 16px 16px 0 0; padding: 14px 18px 18px; }
-  #sheet h4 { font-size: 13px; font-weight: 600; color: #aaa; text-transform: uppercase;
-              letter-spacing: .6px; margin: 8px 0 10px; display: flex; justify-content: space-between; }
-  #sheet h4 span { color: #fff; text-transform: none; letter-spacing: 0; }
-  .opts { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 8px; }
-  .opt { min-width: 64px; height: 38px; padding: 0 14px; border-radius: 19px; border: 1px solid #3a3a3c;
-         background: #2c2c2e; color: #fff; font-size: 14px; font-weight: 500; }
-  .opt.sel { background: #e53935; border-color: #e53935; font-weight: 700; }
-  .handle { width: 40px; height: 4px; border-radius: 2px; background: #555; margin: 0 auto 6px; }
-  #qNote { font-size: 11px; color: #888; margin-top: 2px; }
+  /* Small screens (video at the top in portrait): smaller center buttons */
+  @media (max-height: 320px) {
+    #center { gap: 32px; }
+    .btn.sm { width: 42px; height: 42px; } .btn.sm svg { width: 26px; height: 26px; }
+    .btn.lg { width: 54px; height: 54px; } .btn.lg svg { width: 32px; height: 32px; }
+  }
+
+  /* ---------- Popup menus (speed / quality) ---------- */
+  #menuBg { z-index: 40; display: none; }
+  #menuBg.show { display: block; }
+  .menu { position: absolute; top: 40px; right: 8px; min-width: 120px; background: rgba(28,28,30,.97);
+          border-radius: 10px; padding: 4px 0; display: none; box-shadow: 0 4px 16px rgba(0,0,0,.5);
+          max-height: calc(100% - 48px); overflow-y: auto; -webkit-overflow-scrolling: touch; }
+  .menu.show { display: block; }
+  .mh { font-size: 11px; color: #999; padding: 6px 14px 4px; text-transform: uppercase; letter-spacing: .5px; }
+  .opt { display: flex; align-items: center; width: 100%; height: 34px; padding: 0 14px 0 30px; border: 0;
+         background: transparent; color: #fff; font-size: 14px; text-align: left; position: relative; }
+  .opt:active { background: rgba(255,255,255,.12); }
+  .opt.sel { color: #ff5a52; font-weight: 700; }
+  .opt.sel::before { content: ""; position: absolute; left: 12px; top: 13px; width: 8px; height: 8px;
+                     border-radius: 50%; background: #ff5a52; }
+  #qNote { font-size: 11px; color: #888; padding: 4px 14px 6px; max-width: 200px; }
+  #qNote:empty { display: none; }
+
+  /* Hold-to-speed-up indicator */
+  #boost { position: absolute; top: 10px; left: 50%; transform: translateX(-50%); z-index: 46;
+           background: rgba(0,0,0,.65); padding: 5px 12px; border-radius: 14px; font-size: 13px;
+           font-weight: 600; display: none; pointer-events: none; }
+  #boost.show { display: block; }
 
   /* ---------- Gestures feedback ---------- */
   .ripple { position: absolute; top: 0; bottom: 0; width: 38%; z-index: 15;
@@ -130,7 +144,17 @@
   <div id="ui" class="fill">
     <div class="grad-top"></div>
     <div class="grad-bot"></div>
-    <div id="title"></div>
+    <span id="time">0:00 / 0:00</span>
+    <div id="topRight">
+      <button class="chip" id="speedChip" aria-label="Playback speed">
+        <svg viewBox="0 0 24 24"><path d="M20.38 8.57l-1.23 1.85a8 8 0 0 1-.22 7.58H5.07A8 8 0 0 1 15.58 6.85l1.85-1.23A10 10 0 0 0 3.35 19a2 2 0 0 0 1.72 1h13.85a2 2 0 0 0 1.74-1 10 10 0 0 0-.27-10.44zm-9.79 6.84a2 2 0 0 0 2.83 0l5.66-8.49-8.49 5.66a2 2 0 0 0 0 2.83z"/></svg>
+        <span id="speedVal">1x</span>
+      </button>
+      <button class="chip" id="qualChip" aria-label="Quality">
+        <svg viewBox="0 0 24 24"><path d="M19.14 12.94a7.07 7.07 0 0 0 0-1.88l2.03-1.58a.5.5 0 0 0 .12-.64l-1.92-3.32a.5.5 0 0 0-.61-.22l-2.39.96a7 7 0 0 0-1.62-.94l-.36-2.54A.5.5 0 0 0 13.9 2h-3.84a.5.5 0 0 0-.49.42l-.36 2.54a7.3 7.3 0 0 0-1.62.94l-2.39-.96a.5.5 0 0 0-.61.22L2.67 8.48a.5.5 0 0 0 .12.64l2.03 1.58a7.07 7.07 0 0 0 0 1.88l-2.03 1.58a.5.5 0 0 0-.12.64l1.92 3.32c.12.22.39.3.61.22l2.39-.96c.5.38 1.04.7 1.62.94l.36 2.54c.05.24.25.42.49.42h3.84c.24 0 .44-.18.49-.42l.36-2.54a7.3 7.3 0 0 0 1.62-.94l2.39.96c.22.08.49 0 .61-.22l1.92-3.32a.5.5 0 0 0-.12-.64l-2.03-1.58zM12 15.6a3.6 3.6 0 1 1 0-7.2 3.6 3.6 0 0 1 0 7.2z"/></svg>
+        <span id="qualVal">Auto</span>
+      </button>
+    </div>
 
     <div id="center">
       <button class="btn sm" id="back10" aria-label="Back 10s">
@@ -145,37 +169,19 @@
     </div>
 
     <div id="bottom">
-      <div id="barRow">
-        <div id="bar"><div class="track"></div><div class="buf"></div><div class="prog"></div><div class="knob"></div></div>
-      </div>
-      <div id="ctrlRow">
-        <span id="time">0:00 / 0:00</span>
-        <button class="chip" id="speedChip" aria-label="Playback speed">
-          <svg viewBox="0 0 24 24"><path d="M20.38 8.57l-1.23 1.85a8 8 0 0 1-.22 7.58H5.07A8 8 0 0 1 15.58 6.85l1.85-1.23A10 10 0 0 0 3.35 19a2 2 0 0 0 1.72 1h13.85a2 2 0 0 0 1.74-1 10 10 0 0 0-.27-10.44zm-9.79 6.84a2 2 0 0 0 2.83 0l5.66-8.49-8.49 5.66a2 2 0 0 0 0 2.83z"/></svg>
-          <span id="speedVal">1x</span>
-        </button>
-        <button class="chip" id="qualChip" aria-label="Quality">
-          <svg viewBox="0 0 24 24"><path d="M19.14 12.94a7.07 7.07 0 0 0 0-1.88l2.03-1.58a.5.5 0 0 0 .12-.64l-1.92-3.32a.5.5 0 0 0-.61-.22l-2.39.96a7 7 0 0 0-1.62-.94l-.36-2.54A.5.5 0 0 0 13.9 2h-3.84a.5.5 0 0 0-.49.42l-.36 2.54a7.3 7.3 0 0 0-1.62.94l-2.39-.96a.5.5 0 0 0-.61.22L2.67 8.48a.5.5 0 0 0 .12.64l2.03 1.58a7.07 7.07 0 0 0 0 1.88l-2.03 1.58a.5.5 0 0 0-.12.64l1.92 3.32c.12.22.39.3.61.22l2.39-.96c.5.38 1.04.7 1.62.94l.36 2.54c.05.24.25.42.49.42h3.84c.24 0 .44-.18.49-.42l.36-2.54a7.3 7.3 0 0 0 1.62-.94l2.39.96c.22.08.49 0 .61-.22l1.92-3.32a.5.5 0 0 0-.12-.64l-2.03-1.58zM12 15.6a3.6 3.6 0 1 1 0-7.2 3.6 3.6 0 0 1 0 7.2z"/></svg>
-          <span id="qualVal">Auto</span>
-        </button>
-        <button class="chip icon" id="fs" aria-label="Fullscreen">
-          <svg viewBox="0 0 24 24"><path id="fsIcon" d="M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z"/></svg>
-        </button>
-      </div>
+      <div id="bar"><div class="track"></div><div class="buf"></div><div class="prog"></div><div class="knob"></div></div>
+      <button class="chip icon" id="fs" aria-label="Fullscreen">
+        <svg viewBox="0 0 24 24"><path id="fsIcon" d="M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z"/></svg>
+      </button>
     </div>
   </div>
 
-  <div id="sheetBg" class="fill">
-    <div id="sheet">
-      <div class="handle"></div>
-      <h4>Playback speed <span id="speedNow">1x</span></h4>
-      <div class="opts" id="speedOpts"></div>
-      <h4>Quality <span id="qualNow">Auto</span></h4>
-      <div class="opts" id="qualOpts"></div>
-      <div id="qNote"></div>
-    </div>
+  <div id="menuBg" class="fill">
+    <div class="menu" id="speedMenu"><div class="mh">Speed</div><div id="speedOpts"></div></div>
+    <div class="menu" id="qualMenu"><div class="mh">Quality</div><div id="qualOpts"></div><div id="qNote"></div></div>
   </div>
 
+  <div id="boost">1.75x &#9654;&#9654;</div>
   <div id="toast"></div>
   <div id="spinner"></div>
   <div id="loading">Loading lecture...</div>
@@ -186,7 +192,6 @@
   'use strict';
   var VIDEO_ID = '{{VIDEO_ID}}';
   var START_AT = Number('{{START_AT}}') || 0;
-  var TITLE = decodeURIComponent('{{TITLE}}');
   var MODE = '{{MODE}}';           // 'native' = our stream player, 'embed' = YouTube iframe fallback
   var SEEK_STEP = 10;
   var SPEEDS = [0.5, 0.75, 1, 1.25, 1.5, 1.75, 2];
@@ -202,11 +207,11 @@
   var ui = $('ui'), cover = $('cover'), spinner = $('spinner'), box = $('yt-box');
   var bar = $('bar'), prog = bar.querySelector('.prog'), buf = bar.querySelector('.buf'),
       knob = bar.querySelector('.knob');
-  $('title').textContent = TITLE;
 
   var E = null;                    // active engine
   var ready = false, playing = false, ended = false, dragging = false, lastState = '';
   var hideTimer = 0, tickTimer = 0, lastSaved = 0, speed = 1;
+  var BOOST = 1.75, boosting = false;
 
   // ---------- Hard-block anything that could leak the video link ----------
   ['contextmenu', 'selectstart', 'dragstart', 'copy', 'cut'].forEach(function (ev) {
@@ -217,21 +222,27 @@
   // =====================================================================
   //  Engine 1: native stream player (ExoPlayer in the app, under this page)
   // =====================================================================
-  var ns = { t: 0, d: 0, buf: 0, seekUntil: 0, seekT: 0 };
+  var ns = { t: 0, d: 0, buf: 0, seekUntil: 0, seekT: 0, at: 0 };
   var NativeEngine = {
     name: 'native',
     play: function () { Native.cmd('play', ''); },
     pause: function () { Native.cmd('pause', ''); },
-    seek: function (t) { ns.t = t; ns.seekT = t; ns.seekUntil = Date.now() + 700; Native.cmd('seek', String(t)); },
+    seek: function (t) { ns.t = t; ns.at = Date.now(); ns.seekT = t; ns.seekUntil = Date.now() + 700; Native.cmd('seek', String(t)); },
     setRate: function (r) { Native.cmd('rate', String(r)); },
     setQuality: function (id) { Native.cmd('quality', id); },
-    time: function () { return ns.t; },
+    // The app reports position ~2x/sec; in between we advance it ourselves for a smooth bar.
+    time: function () {
+      if (!playing) return ns.t;
+      var t = ns.t + (Date.now() - ns.at) / 1000 * (boosting ? BOOST : speed);
+      return ns.d ? Math.min(t, ns.d) : t;
+    },
     duration: function () { return ns.d; },
     loaded: function () { return ns.buf; }
   };
 
   // Called by the app ~4x per second and on every change.
   window.nativeState = function (s) {
+    if (MODE !== 'native') return;   // late update after switching to the fallback
     if (!ready) {
       ready = true;
       $('loading').classList.add('hidden');
@@ -240,7 +251,7 @@
       showUi(true);
     }
     // Ignore positions from before a seek we just made (they arrive slightly late).
-    if (Date.now() > ns.seekUntil || Math.abs(s.t - ns.seekT) < 1.5) ns.t = s.t;
+    if (Date.now() > ns.seekUntil || Math.abs(s.t - ns.seekT) < 1.5) { ns.t = s.t; ns.at = Date.now(); }
     ns.d = s.d; ns.buf = s.buf;
     if (s.state !== 'buffering') $('loading').classList.add('hidden'); // clear "Reconnecting..." etc.
     if (s.qualities) setQualityOptions(s.qualities, s.quality, s.label, s.engine);
@@ -354,7 +365,6 @@
   function updateEmbedQuality() {
     var q = yt && yt.getPlaybackQuality ? Q_NAMES[yt.getPlaybackQuality()] : '';
     $('qualVal').textContent = q || 'Auto';
-    $('qualNow').textContent = q ? 'Auto (' + q + ')' : 'Auto';
   }
 
   // =====================================================================
@@ -418,9 +428,10 @@
     clearInterval(tickTimer);
     tickTimer = setInterval(function () {
       if (!ready) return;
+      save(false);
+      if (ui.classList.contains('off')) return;   // nothing visible to update: save work
       if (!dragging) render(cur());
       buf.style.width = (E.loaded() * 100) + '%';
-      save(false);
     }, 250);
   }
 
@@ -445,7 +456,7 @@
   function setSpeed(s) {
     speed = s;
     if (ready) E.setRate(s);
-    $('speedVal').textContent = $('speedNow').textContent = s + 'x';
+    $('speedVal').textContent = s + 'x';
     markSel('speedOpts', String(s));
   }
 
@@ -463,7 +474,7 @@
       b.addEventListener('click', function (e) {
         e.stopPropagation();
         onPick(it);
-        closeSheet();
+        closeMenus();
       });
       $(id).appendChild(b);
     });
@@ -481,29 +492,42 @@
       buildOpts('qualOpts', qualities.map(function (q) { return { label: q.label, value: q.id }; }),
         function (it) { E.setQuality(it.value); toast('Quality ' + it.label); });
       markSel('qualOpts', selected);
-      $('qNote').textContent = engine === 'embed'
-        ? 'Compatibility mode: quality is chosen automatically by YouTube.'
-        : 'Auto adjusts to your internet speed.';
+      $('qNote').textContent = engine === 'embed' ? 'Chosen automatically in compatibility mode.' : '';
     }
     if (engine === 'embed') return;
-    var auto = selected === 'auto';
     $('qualVal').textContent = label || 'Auto';
-    $('qualNow').textContent = auto ? (label ? 'Auto (' + label + ')' : 'Auto') : (label || '');
+    // Show what Auto is currently playing, e.g. "Auto (720p)".
+    var autoBtn = $('qualOpts').querySelector('[data-v="auto"]');
+    if (autoBtn) autoBtn.textContent = selected === 'auto' && label ? 'Auto (' + label + ')' : 'Auto';
   }
 
-  var sheetBg = $('sheetBg');
-  function openSheet() { clearTimeout(hideTimer); sheetBg.classList.add('show'); }
-  function closeSheet() { sheetBg.classList.remove('show'); scheduleHide(); }
-  sheetBg.addEventListener('click', function (e) { if (e.target === sheetBg) closeSheet(); });
-  $('sheet').addEventListener('click', function (e) { e.stopPropagation(); });
+  // Small popup menus anchored at the top-right chips; tap outside closes them.
+  var menuBg = $('menuBg');
+  function openMenu(id) {
+    var open = $(id).classList.contains('show');
+    closeMenus();
+    if (open) return;
+    clearTimeout(hideTimer);
+    $(id).classList.add('show');
+    menuBg.classList.add('show');
+  }
+  function closeMenus() {
+    $('speedMenu').classList.remove('show');
+    $('qualMenu').classList.remove('show');
+    menuBg.classList.remove('show');
+    scheduleHide();
+  }
+  menuBg.addEventListener('click', function (e) { if (e.target === menuBg) closeMenus(); });
+  menuBg.addEventListener('touchend', function (e) { if (e.target === menuBg) { e.preventDefault(); closeMenus(); } });
 
   // ---------- Controls visibility ----------
   function showUi(stay) {
     ui.classList.remove('off');
+    if (ready && !dragging) render(cur());
     if (!stay) scheduleHide();
   }
   function hideUi() {
-    if (!playing || dragging || sheetBg.classList.contains('show')) return;
+    if (!playing || dragging || menuBg.classList.contains('show')) return;
     ui.classList.add('off');
   }
   function scheduleHide() {
@@ -518,8 +542,8 @@
   on('back10', function () { seekBy(-SEEK_STEP); flash('l', SEEK_STEP); });
   on('fwd10', function () { seekBy(SEEK_STEP); flash('r', SEEK_STEP); });
   on('fs', function () { try { Native.toggleFullscreen(); } catch (e) {} });
-  on('speedChip', openSheet);
-  on('qualChip', openSheet);
+  on('speedChip', function () { openMenu('speedMenu'); });
+  on('qualChip', function () { openMenu('qualMenu'); });
 
   window.setFullscreenIcon = function (fs) {
     $('fsIcon').setAttribute('d', fs
@@ -607,9 +631,38 @@
     }, 300);
   }
 
+  // Long press anywhere on the video = play at 1.75x until the finger is lifted.
+  var holdTimer = 0, touchX = 0, touchY = 0;
+  function startBoost() {
+    if (!ready || !playing) return;
+    boosting = true;
+    clearTimeout(tapTimer);
+    E.setRate(BOOST);
+    $('boost').classList.add('show');
+  }
+  function endBoost() {
+    if (!boosting) return;
+    boosting = false;
+    E.setRate(speed);
+    $('boost').classList.remove('show');
+  }
+
   var shield = $('shield');
+  shield.addEventListener('touchstart', function (e) {
+    var t = e.touches[0];
+    touchX = t.clientX; touchY = t.clientY;
+    clearTimeout(holdTimer);
+    holdTimer = setTimeout(startBoost, 450);
+  }, { passive: true });
+  shield.addEventListener('touchmove', function (e) {
+    var t = e.touches[0];
+    if (Math.abs(t.clientX - touchX) > 12 || Math.abs(t.clientY - touchY) > 12) clearTimeout(holdTimer);
+  }, { passive: true });
+  shield.addEventListener('touchcancel', function () { clearTimeout(holdTimer); endBoost(); });
   shield.addEventListener('touchend', function (e) {
     e.preventDefault();
+    clearTimeout(holdTimer);
+    if (boosting) { endBoost(); return; }   // a long press is not a tap
     handleTap(e.changedTouches[0].clientX, window.innerWidth);
   }, { passive: false });
   shield.addEventListener('click', function (e) { handleTap(e.clientX, window.innerWidth); });
