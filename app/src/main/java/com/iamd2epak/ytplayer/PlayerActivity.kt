@@ -15,10 +15,12 @@ import android.view.WindowManager
 import android.webkit.JavascriptInterface
 import android.webkit.WebChromeClient
 import android.webkit.WebResourceRequest
+import android.webkit.WebResourceResponse
 import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import android.widget.Toast
+import java.io.ByteArrayInputStream
 
 /**
  * Locked-down YouTube player:
@@ -34,9 +36,10 @@ class PlayerActivity : Activity() {
         const val EXTRA_VIDEO = "video"
         const val EXTRA_TITLE = "title"
 
-        // Page origin sent to YouTube as Referer/origin. Any real https origin works;
-        // put your own website domain here if you have one.
-        private const val BASE_URL = "https://iamd2epak.github.io/"
+        // The player page is served from this https URL by the app itself (intercepted, never
+        // fetched from the network). A real https page URL makes WebView send a proper Referer,
+        // which YouTube now requires (otherwise: error 152/153 or a black player).
+        private const val PAGE_URL = "https://iamd2epak.github.io/yt-player/player.html"
         private const val PREFS = "progress"
     }
 
@@ -44,6 +47,7 @@ class PlayerActivity : Activity() {
     private lateinit var videoId: String
     private var title = ""
     private var fullscreen = false
+    @Volatile private var pageHtml = ""
 
     @SuppressLint("SetJavaScriptEnabled")
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -88,6 +92,16 @@ class PlayerActivity : Activity() {
         }
 
         web.webViewClient = object : WebViewClient() {
+            // Serve our player page for PAGE_URL; everything else (YouTube) loads normally.
+            override fun shouldInterceptRequest(view: WebView, request: WebResourceRequest): WebResourceResponse? {
+                if (request.url.toString() != PAGE_URL) return null
+                return WebResourceResponse("text/html", "UTF-8", ByteArrayInputStream(pageHtml.toByteArray(Charsets.UTF_8)))
+                    .apply {
+                        setStatusCodeAndReasonPhrase(200, "OK")
+                        responseHeaders = mapOf("Cache-Control" to "no-store")
+                    }
+            }
+
             // Block every top-level navigation (YouTube logo, title, end-screen, links...).
             // Nothing can take the user out of the player page.
             override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean =
@@ -111,7 +125,8 @@ class PlayerActivity : Activity() {
             .replace("{{VIDEO_ID}}", videoId)
             .replace("{{START_AT}}", startAt.toInt().toString())
             .replace("{{TITLE}}", strictEncode(title))
-        web.loadDataWithBaseURL(BASE_URL, html, "text/html", "UTF-8", null)
+        pageHtml = html
+        web.loadUrl(PAGE_URL)
     }
 
     /** Percent-encode everything except [A-Za-z0-9] so the title is safe inside a JS string. */

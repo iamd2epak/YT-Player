@@ -1,8 +1,11 @@
 <resources>
-    <style name="AppTheme" parent="android:Theme.Material.Light.DarkActionBar">
+    <style name="AppTheme" parent="android:Theme.Material.NoActionBar">
         <item name="android:colorPrimary">#1E1E2E</item>
         <item name="android:colorPrimaryDark">#1E1E2E</item>
         <item name="android:colorAccent">#E53935</item>
+        <item name="android:windowBackground">@color/bg</item>
+        <item name="android:statusBarColor">#1E1E2E</item>
+        <item name="android:navigationBarColor">#1E1E2E</item>
     </style>
 
     <style name="PlayerTheme" parent="android:Theme.Material.NoActionBar.Fullscreen">

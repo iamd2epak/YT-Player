@@ -12,19 +12,19 @@
                font-family: Roboto, sans-serif; color: #fff; }
 
   /* YouTube iframe never receives any touch: no logo click, no title/copy-link, no long press. */
-  #yt-wrap { position: absolute; inset: 0; pointer-events: none; }
+  #yt-wrap { position: absolute; top: 0; right: 0; bottom: 0; left: 0; pointer-events: none; }
   #yt-wrap iframe { width: 100%; height: 100%; border: 0; pointer-events: none; }
 
   /* Full-size shield above the iframe. Every touch lands here. */
-  #shield { position: absolute; inset: 0; z-index: 10; touch-action: none; }
+  #shield { position: absolute; top: 0; right: 0; bottom: 0; left: 0; z-index: 10; touch-action: none; }
 
   /* Hides YouTube's own pause/end overlays (title, "More videos", end screen) */
-  #cover { position: absolute; inset: 0; z-index: 5; background: #000;
+  #cover { position: absolute; top: 0; right: 0; bottom: 0; left: 0; z-index: 5; background: #000;
            opacity: 1; transition: opacity .25s; pointer-events: none; }
   #cover.paused { opacity: .55; }
   #cover.hidden { opacity: 0; }
 
-  #ui { position: absolute; inset: 0; z-index: 20; pointer-events: none;
+  #ui { position: absolute; top: 0; right: 0; bottom: 0; left: 0; z-index: 20; pointer-events: none;
         transition: opacity .2s; }
   #ui.off { opacity: 0; }
   #ui.off * { pointer-events: none !important; }
@@ -75,10 +75,12 @@
              margin: -23px 0 0 -23px; border: 4px solid rgba(255,255,255,.25);
              border-top-color: #fff; border-radius: 50%; animation: spin .8s linear infinite;
              pointer-events: none; }
-  #spinner.hidden { display: none; }
+  #spinner.hidden, #loading.hidden { display: none; }
+  #loading { position: absolute; top: 50%; left: 0; right: 0; margin-top: 36px; z-index: 25;
+             text-align: center; font-size: 14px; color: #bbb; pointer-events: none; }
   @keyframes spin { to { transform: rotate(360deg); } }
 
-  #msg { position: absolute; inset: 0; z-index: 30; display: none; background: #000;
+  #msg { position: absolute; top: 0; right: 0; bottom: 0; left: 0; z-index: 30; display: none; background: #000;
          flex-direction: column; align-items: center; justify-content: center; gap: 16px;
          text-align: center; padding: 24px; font-size: 15px; }
   #msg.show { display: flex; }
@@ -133,6 +135,7 @@
 
   <div id="menu"></div>
   <div id="spinner"></div>
+  <div id="loading">Loading lecture...</div>
   <div id="msg"><div id="msgText"></div><button class="btn txt" id="retry" style="background:#e53935">Retry</button></div>
 
 <script>
@@ -169,6 +172,11 @@
   tag.onerror = function () { showError('No internet connection.'); };
   document.head.appendChild(tag);
 
+  // Watchdog: never leave a silent black screen.
+  var watchdog = setTimeout(function () {
+    if (!ready) showError('Video is taking too long to load. Check your internet and retry.');
+  }, 20000);
+
   window.onYouTubeIframeAPIReady = function () {
     player = new YT.Player('yt', {
       videoId: VIDEO_ID,
@@ -183,11 +191,18 @@
 
   function onReady() {
     ready = true;
+    clearTimeout(watchdog);
+    $('loading').classList.add('hidden');
     var f = player.getIframe();
     f.setAttribute('tabindex', '-1');
     player.playVideo();
     tick();
-    showUi();
+    showUi(true);
+    // If the device blocked autoplay, reveal the thumbnail + play button instead of black.
+    setTimeout(function () {
+      var st = player.getPlayerState ? player.getPlayerState() : -1;
+      if (st === -1 || st === 5) { cover.className = 'paused'; spinner.classList.add('hidden'); }
+    }, 3000);
   }
 
   function onState(e) {
@@ -198,6 +213,7 @@
     if (playing) { cover.className = 'hidden'; $('msg').classList.remove('show'); }
     else if (ended) { cover.className = ''; save(true); }
     else if (e.data === S.PAUSED) { cover.className = 'paused'; save(true); }
+    else if (e.data === S.CUED) { cover.className = 'paused'; }
     $('playIcon').setAttribute('d', playing ? 'M6 19h4V5H6v14zm8-14v14h4V5h-4z'
       : ended ? 'M12 5V1L7 6l5 5V7c3.31 0 6 2.69 6 6s-2.69 6-6 6-6-2.69-6-6H4c0 4.42 3.58 8 8 8s8-3.58 8-8-3.58-8-8-8z'
       : 'M8 5v14l11-7z');
@@ -216,6 +232,7 @@
 
   function showError(t) {
     spinner.classList.add('hidden');
+    $('loading').classList.add('hidden');
     $('msgText').textContent = t;
     $('msg').classList.add('show');
   }
