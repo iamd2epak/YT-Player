@@ -14,7 +14,7 @@ Simple, ad-free video player for Android.
 Get `MuteAdTube.apk` from **Releases → latest**. Each push to `main` rebuilds it and replaces the old one.
 
 ## Build
-- **GitHub:** Actions → *Build APK* → Run workflow
+- **GitHub:** Actions → *Build APK* → Run workflow (manual)
 - **Local:** `./gradlew assembleRelease`
 
 ## Signing (recommended)
