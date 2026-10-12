@@ -12,3 +12,4 @@ captures/
 *.aab
 .env
 *.p12
+keystore.properties

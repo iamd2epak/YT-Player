@@ -11,17 +11,19 @@ Simple, ad-free video player for Android.
 - History with thumbnails; resumes where you left off
 
 ## Download
-Get `MuteAdTube.apk` from **Releases → latest**. Each push to `main` rebuilds it and replaces the old one.
+Get `MuteAdTube.apk` from **Releases → latest**.
 
 ## Build
 - **GitHub:** Actions → *Build APK* → Run workflow (manual)
-- **Local:** `./gradlew assembleRelease`
+- **Local:** `./gradlew assembleRelease` (APK) or `./gradlew bundleRelease` (Play Store AAB)
 
-## Signing (recommended)
-Add these repo secrets so every APK has the same key and updates install cleanly:
+## Signing
+Release builds are signed with the upload key from either a local, gitignored `keystore.properties`
+(`storeFile`, `storePassword`, `keyAlias`, `keyPassword`) or these repo secrets:
 `KEYSTORE_BASE64` (base64 of your `.jks`), `SIGNING_STORE_PASSWORD`, `SIGNING_KEY_ALIAS`, `SIGNING_KEY_PASSWORD`.
 Without them, builds use a temporary debug key (uninstall before updating).
 
 ## Notes
+- [Privacy Policy](PRIVACY.md) · [Terms of Use](TERMS.md) · Play Store guide: [store/PLAY_STORE.md](store/PLAY_STORE.md)
 - Playback via ExoPlayer; online links are resolved with NewPipeExtractor. If online playback breaks, update it in `app/build.gradle.kts`.
 - License: GPL-3.0 (required by NewPipeExtractor).

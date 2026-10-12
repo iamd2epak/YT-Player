@@ -2,7 +2,7 @@
     <style name="AppTheme" parent="android:Theme.Material.NoActionBar">
         <item name="android:colorPrimary">#1E1E2E</item>
         <item name="android:colorPrimaryDark">#1E1E2E</item>
-        <item name="android:colorAccent">#E53935</item>
+        <item name="android:colorAccent">#7C5CFF</item>
         <item name="android:windowBackground">@color/bg</item>
         <item name="android:statusBarColor">#1E1E2E</item>
         <item name="android:navigationBarColor">#1E1E2E</item>
@@ -12,7 +12,7 @@
         <item name="android:windowBackground">@android:color/black</item>
         <item name="android:statusBarColor">#0F0F0F</item>
         <item name="android:navigationBarColor">#0F0F0F</item>
-        <item name="android:colorAccent">#E53935</item>
+        <item name="android:colorAccent">#7C5CFF</item>
         <item name="android:windowContentOverlay">@null</item>
     </style>
 </resources>

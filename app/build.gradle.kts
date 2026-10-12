@@ -1,3 +1,5 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
@@ -5,25 +7,30 @@ plugins {
 
 android {
     namespace = "com.mutetube.app"
-    compileSdk = 35
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "com.mutetube.app"
         minSdk = 24
-        targetSdk = 35
-        // CI passes the run number so every release installs as an update.
-        versionCode = System.getenv("VERSION_CODE")?.toIntOrNull() ?: 1
-        versionName = "1.0.${System.getenv("VERSION_CODE") ?: "0"}"
+        targetSdk = 36
+        // Bump both for every Play Store upload (versionCode must always increase).
+        versionCode = 1
+        versionName = "1.0.0"
     }
 
-    // Release key comes from env vars (GitHub secrets) — never commit a keystore.
-    val keystore = System.getenv("SIGNING_KEYSTORE")?.let { file(it) }?.takeIf { it.exists() }
+    // Release (upload) key: env vars (GitHub secrets) or a local, gitignored keystore.properties.
+    // Never commit a keystore.
+    val props = Properties().apply {
+        rootProject.file("keystore.properties").takeIf { it.exists() }?.inputStream()?.use { load(it) }
+    }
+    fun secret(env: String, prop: String): String? = System.getenv(env) ?: props.getProperty(prop)
+    val keystore = secret("SIGNING_KEYSTORE", "storeFile")?.let { rootProject.file(it) }?.takeIf { it.exists() }
     signingConfigs {
         if (keystore != null) create("release") {
             storeFile = keystore
-            storePassword = System.getenv("SIGNING_STORE_PASSWORD")
-            keyAlias = System.getenv("SIGNING_KEY_ALIAS")
-            keyPassword = System.getenv("SIGNING_KEY_PASSWORD")
+            storePassword = secret("SIGNING_STORE_PASSWORD", "storePassword")
+            keyAlias = secret("SIGNING_KEY_ALIAS", "keyAlias")
+            keyPassword = secret("SIGNING_KEY_PASSWORD", "keyPassword")
         }
     }
 
@@ -48,7 +55,7 @@ android {
 }
 
 dependencies {
-    // Resolves the stream URLs of the course's own YouTube videos on-device.
+    // Resolves online video stream URLs on-device.
     implementation("com.github.TeamNewPipe:NewPipeExtractor:v0.26.5")
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
 

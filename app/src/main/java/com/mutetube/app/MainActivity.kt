@@ -36,7 +36,7 @@ import android.widget.Toast
 class MainActivity : Activity() {
 
     private companion object {
-        const val ACCENT = "#E53935"
+        const val ACCENT = "#7C5CFF"
         const val CARD = "#2A2A3C"
         const val RC_PICK = 21
     }
@@ -55,8 +55,8 @@ class MainActivity : Activity() {
             setPadding(dp(16), dp(16), dp(16), dp(24))
         }
 
-        // ---- Brand header ----
-        column.addView(TextView(this).apply {
+        // ---- Brand header + settings ----
+        val brand = TextView(this).apply {
             val name = getString(R.string.app_name)
             val split = name.lastIndexOf(' ').coerceAtLeast(0)
             text = SpannableString(name).apply {
@@ -65,7 +65,21 @@ class MainActivity : Activity() {
             setTextColor(Color.WHITE)
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 26f)
             typeface = Typeface.DEFAULT_BOLD
-            setPadding(0, dp(8), 0, 0)
+        }
+        column.addView(LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(0, dp(4), 0, 0)
+            addView(brand, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+            addView(ImageView(this@MainActivity).apply {
+                setImageResource(R.drawable.ic_settings)
+                imageTintList = ColorStateList.valueOf(Color.parseColor("#CCCCDD"))
+                scaleType = ImageView.ScaleType.CENTER
+                contentDescription = "Settings"
+                background = RippleDrawable(ColorStateList.valueOf(Color.parseColor("#33FFFFFF")), null,
+                    GradientDrawable().apply { shape = GradientDrawable.OVAL; setColor(Color.WHITE) })
+                setOnClickListener { start(Intent(this@MainActivity, SettingsActivity::class.java)) }
+            }, LinearLayout.LayoutParams(dp(44), dp(44)))
         })
         column.addView(TextView(this).apply {
             text = "Simple, ad-free video player. Open a video, paste a link, or share one to this app."

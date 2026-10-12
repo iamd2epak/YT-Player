@@ -15,6 +15,7 @@ import android.graphics.drawable.RippleDrawable
 import android.os.Build
 import android.os.Bundle
 import android.os.Message
+import android.window.OnBackInvokedDispatcher
 import android.provider.OpenableColumns
 import android.net.Uri
 import android.text.SpannableString
@@ -83,7 +84,7 @@ class PlayerActivity : Activity() {
         private const val RC_NOTIFY = 12
         private const val BG = "#0F0F0F"
         private const val CARD = "#212121"
-        private const val ACCENT = "#E53935"
+        private const val ACCENT = "#7C5CFF"
         private var askedNotify = false
     }
 
@@ -122,6 +123,9 @@ class PlayerActivity : Activity() {
     @SuppressLint("SetJavaScriptEnabled")
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        if (Build.VERSION.SDK_INT >= 33) {
+            onBackInvokedDispatcher.registerOnBackInvokedCallback(OnBackInvokedDispatcher.PRIORITY_DEFAULT) { handleBack() }
+        }
         if (BLOCK_SCREENSHOTS) {
             window.setFlags(WindowManager.LayoutParams.FLAG_SECURE, WindowManager.LayoutParams.FLAG_SECURE)
         }
@@ -410,10 +414,14 @@ class PlayerActivity : Activity() {
         if (hasFocus) applySystemUi()
     }
 
-    @Deprecated("Deprecated in Java")
-    override fun onBackPressed() {
-        if (fullscreen) setFullscreen(false) else super.onBackPressed()
+    // Back leaves fullscreen first. Android 13+ (and 16's gesture back) uses OnBackInvokedDispatcher.
+    private fun handleBack() {
+        if (fullscreen) setFullscreen(false) else finish()
     }
+
+    @Deprecated("Deprecated in Java")
+    @Suppress("GestureBackNavigation") // older Android only; 13+ is handled by onBackInvokedDispatcher
+    override fun onBackPressed() = handleBack()
 
     private fun backgroundActive() = bgOn && mode == "native" && stream != null
 
