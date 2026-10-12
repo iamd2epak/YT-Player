@@ -10,6 +10,9 @@ Android app that plays YouTube lectures in its own player, without exposing the 
 - Resumes where you left off
 - Paste any YouTube link to play
 
+- <img width="1080" height="637" alt="198048" src="https://github.com/user-attachments/assets/92452e84-4a84-44ee-a140-0d75ca6f14b7" />
+
+
 ## Add lectures
 Edit `app/src/main/java/com/iamd2epak/ytplayer/Lectures.kt`:
 ```kotlin
