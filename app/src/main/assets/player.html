@@ -1,0 +1,410 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0;
+      -webkit-user-select: none; user-select: none;
+      -webkit-touch-callout: none; -webkit-tap-highlight-color: transparent; }
+  html, body { width: 100%; height: 100%; background: #000; overflow: hidden;
+               font-family: Roboto, sans-serif; color: #fff; }
+
+  /* YouTube iframe never receives any touch: no logo click, no title/copy-link, no long press. */
+  #yt-wrap { position: absolute; inset: 0; pointer-events: none; }
+  #yt-wrap iframe { width: 100%; height: 100%; border: 0; pointer-events: none; }
+
+  /* Full-size shield above the iframe. Every touch lands here. */
+  #shield { position: absolute; inset: 0; z-index: 10; touch-action: none; }
+
+  /* Hides YouTube's own pause/end overlays (title, "More videos", end screen) */
+  #cover { position: absolute; inset: 0; z-index: 5; background: #000;
+           opacity: 1; transition: opacity .25s; pointer-events: none; }
+  #cover.paused { opacity: .55; }
+  #cover.hidden { opacity: 0; }
+
+  #ui { position: absolute; inset: 0; z-index: 20; pointer-events: none;
+        transition: opacity .2s; }
+  #ui.off { opacity: 0; }
+  #ui.off * { pointer-events: none !important; }
+  .grad-top, .grad-bot { position: absolute; left: 0; right: 0; height: 90px; }
+  .grad-top { top: 0; background: linear-gradient(rgba(0,0,0,.7), transparent); }
+  .grad-bot { bottom: 0; background: linear-gradient(transparent, rgba(0,0,0,.8)); }
+
+  #title { position: absolute; top: 12px; left: 16px; right: 120px; font-size: 15px;
+           white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #speed { position: absolute; top: 6px; right: 12px; pointer-events: auto; }
+
+  #center { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            display: flex; align-items: center; gap: 40px; }
+  .btn { pointer-events: auto; background: rgba(0,0,0,.45); border: 0; color: #fff;
+         border-radius: 50%; display: flex; align-items: center; justify-content: center; }
+  .btn svg { fill: #fff; }
+  .btn.sm { width: 52px; height: 52px; }
+  .btn.sm svg { width: 30px; height: 30px; }
+  .btn.lg { width: 68px; height: 68px; }
+  .btn.lg svg { width: 40px; height: 40px; }
+  .btn.flat { background: transparent; width: 40px; height: 40px; border-radius: 6px; }
+  .btn.flat svg { width: 26px; height: 26px; }
+  .btn.txt { width: auto; height: 34px; padding: 0 12px; border-radius: 17px;
+             font-size: 14px; font-weight: 600; }
+
+  #bottom { position: absolute; left: 0; right: 0; bottom: 0; padding: 0 12px 6px;
+            display: flex; align-items: center; gap: 10px; }
+  #time { font-size: 13px; min-width: 92px; font-variant-numeric: tabular-nums; }
+  #bar { flex: 1; position: relative; height: 32px; pointer-events: auto; touch-action: none; }
+  #bar .track, #bar .buf, #bar .prog { position: absolute; left: 0; top: 14px; height: 4px;
+                                       border-radius: 2px; }
+  #bar .track { right: 0; background: rgba(255,255,255,.25); }
+  #bar .buf { background: rgba(255,255,255,.45); width: 0; }
+  #bar .prog { background: #e53935; width: 0; }
+  #bar .knob { position: absolute; top: 9px; width: 14px; height: 14px; margin-left: -7px;
+               border-radius: 50%; background: #e53935; left: 0; }
+
+  .ripple { position: absolute; top: 0; bottom: 0; width: 38%; z-index: 15;
+            display: flex; align-items: center; justify-content: center; flex-direction: column;
+            background: rgba(255,255,255,.12); opacity: 0; transition: opacity .25s;
+            pointer-events: none; font-size: 14px; font-weight: 600; }
+  .ripple svg { width: 34px; height: 34px; fill: #fff; margin-bottom: 4px; }
+  .ripple.show { opacity: 1; }
+  #rip-l { left: 0; border-radius: 0 50% 50% 0 / 0 50% 50% 0; }
+  #rip-r { right: 0; border-radius: 50% 0 0 50% / 50% 0 0 50%; }
+
+  #spinner { position: absolute; top: 50%; left: 50%; width: 46px; height: 46px; z-index: 25;
+             margin: -23px 0 0 -23px; border: 4px solid rgba(255,255,255,.25);
+             border-top-color: #fff; border-radius: 50%; animation: spin .8s linear infinite;
+             pointer-events: none; }
+  #spinner.hidden { display: none; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  #msg { position: absolute; inset: 0; z-index: 30; display: none; background: #000;
+         flex-direction: column; align-items: center; justify-content: center; gap: 16px;
+         text-align: center; padding: 24px; font-size: 15px; }
+  #msg.show { display: flex; }
+
+  #menu { position: absolute; top: 44px; right: 12px; z-index: 40; background: #212121;
+          border-radius: 8px; padding: 6px 0; display: none; pointer-events: auto; }
+  #menu.show { display: block; }
+  #menu div { padding: 9px 26px; font-size: 14px; }
+  #menu div.sel { color: #e53935; font-weight: 700; }
+</style>
+</head>
+<body oncontextmenu="return false">
+  <div id="yt-wrap"><div id="yt"></div></div>
+  <div id="cover"></div>
+  <div id="shield"></div>
+
+  <div id="rip-l" class="ripple">
+    <svg viewBox="0 0 24 24"><path d="M11 18V6l-8.5 6 8.5 6zm.5-6l8.5 6V6l-8.5 6z"/></svg>
+    <span></span>
+  </div>
+  <div id="rip-r" class="ripple">
+    <svg viewBox="0 0 24 24"><path d="M4 18l8.5-6L4 6v12zm9-12v12l8.5-6L13 6z"/></svg>
+    <span></span>
+  </div>
+
+  <div id="ui">
+    <div class="grad-top"></div>
+    <div class="grad-bot"></div>
+    <div id="title"></div>
+    <div id="speed"><button class="btn txt" id="speedBtn">1x</button></div>
+
+    <div id="center">
+      <button class="btn sm" id="back10" aria-label="Back 10s">
+        <svg viewBox="0 0 24 24"><path d="M12 5V1L7 6l5 5V7c3.31 0 6 2.69 6 6s-2.69 6-6 6-6-2.69-6-6H4c0 4.42 3.58 8 8 8s8-3.58 8-8-3.58-8-8-8z"/><text x="12" y="16" font-size="6.5" text-anchor="middle" fill="#fff" font-weight="700">10</text></svg>
+      </button>
+      <button class="btn lg" id="play" aria-label="Play/Pause">
+        <svg viewBox="0 0 24 24"><path id="playIcon" d="M8 5v14l11-7z"/></svg>
+      </button>
+      <button class="btn sm" id="fwd10" aria-label="Forward 10s">
+        <svg viewBox="0 0 24 24"><path d="M12 5V1l5 5-5 5V7c-3.31 0-6 2.69-6 6s2.69 6 6 6 6-2.69 6-6h2c0 4.42-3.58 8-8 8s-8-3.58-8-8 3.58-8 8-8z"/><text x="12" y="16" font-size="6.5" text-anchor="middle" fill="#fff" font-weight="700">10</text></svg>
+      </button>
+    </div>
+
+    <div id="bottom">
+      <span id="time">0:00 / 0:00</span>
+      <div id="bar"><div class="track"></div><div class="buf"></div><div class="prog"></div><div class="knob"></div></div>
+      <button class="btn flat" id="fs" aria-label="Fullscreen">
+        <svg viewBox="0 0 24 24"><path id="fsIcon" d="M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z"/></svg>
+      </button>
+    </div>
+  </div>
+
+  <div id="menu"></div>
+  <div id="spinner"></div>
+  <div id="msg"><div id="msgText"></div><button class="btn txt" id="retry" style="background:#e53935">Retry</button></div>
+
+<script>
+(function () {
+  'use strict';
+  var VIDEO_ID = '{{VIDEO_ID}}';
+  var START_AT = Number('{{START_AT}}') || 0;
+  var TITLE = decodeURIComponent('{{TITLE}}');
+  var SEEK_STEP = 10;
+  var SPEEDS = [0.5, 0.75, 1, 1.25, 1.5, 1.75, 2];
+
+  var Native = window.Android || {
+    onProgress: function () {}, reload: function () { location.reload(); }, toggleFullscreen: function () {}, isFullscreen: function () { return false; }
+  };
+
+  var $ = function (id) { return document.getElementById(id); };
+  var ui = $('ui'), cover = $('cover'), spinner = $('spinner');
+  var bar = $('bar'), prog = bar.querySelector('.prog'), buf = bar.querySelector('.buf'),
+      knob = bar.querySelector('.knob');
+  $('title').textContent = TITLE;
+
+  var player = null, ready = false, playing = false, ended = false, dragging = false;
+  var hideTimer = 0, tickTimer = 0, lastSaved = 0;
+
+  // ---------- Hard-block anything that could leak the video link ----------
+  ['contextmenu', 'selectstart', 'dragstart', 'copy', 'cut'].forEach(function (ev) {
+    document.addEventListener(ev, function (e) { e.preventDefault(); e.stopPropagation(); }, true);
+  });
+  window.open = function () { return null; };
+
+  // ---------- YouTube IFrame API ----------
+  var tag = document.createElement('script');
+  tag.src = 'https://www.youtube.com/iframe_api';
+  tag.onerror = function () { showError('No internet connection.'); };
+  document.head.appendChild(tag);
+
+  window.onYouTubeIframeAPIReady = function () {
+    player = new YT.Player('yt', {
+      videoId: VIDEO_ID,
+      playerVars: {
+        autoplay: 1, controls: 0, disablekb: 1, fs: 0, rel: 0, playsinline: 1,
+        iv_load_policy: 3, modestbranding: 1, cc_load_policy: 0, enablejsapi: 1,
+        start: Math.floor(START_AT), origin: location.origin
+      },
+      events: { onReady: onReady, onStateChange: onState, onError: onError }
+    });
+  };
+
+  function onReady() {
+    ready = true;
+    var f = player.getIframe();
+    f.setAttribute('tabindex', '-1');
+    player.playVideo();
+    tick();
+    showUi();
+  }
+
+  function onState(e) {
+    var S = YT.PlayerState;
+    playing = e.data === S.PLAYING;
+    ended = e.data === S.ENDED;
+    spinner.classList.toggle('hidden', e.data !== S.BUFFERING && e.data !== S.UNSTARTED);
+    if (playing) { cover.className = 'hidden'; $('msg').classList.remove('show'); }
+    else if (ended) { cover.className = ''; save(true); }
+    else if (e.data === S.PAUSED) { cover.className = 'paused'; save(true); }
+    $('playIcon').setAttribute('d', playing ? 'M6 19h4V5H6v14zm8-14v14h4V5h-4z'
+      : ended ? 'M12 5V1L7 6l5 5V7c3.31 0 6 2.69 6 6s-2.69 6-6 6-6-2.69-6-6H4c0 4.42 3.58 8 8 8s8-3.58 8-8-3.58-8-8-8z'
+      : 'M8 5v14l11-7z');
+    if (playing) scheduleHide(); else showUi(true);
+  }
+
+  function onError(e) {
+    var m = {
+      2: 'Invalid video.', 5: 'This video can\'t be played here.',
+      100: 'Video not found or removed.', 101: 'Embedding is disabled for this video.',
+      150: 'Embedding is disabled for this video.', 152: 'Player configuration error.',
+      153: 'Player configuration error.'
+    };
+    showError(m[e.data] || 'Playback error (' + e.data + ').');
+  }
+
+  function showError(t) {
+    spinner.classList.add('hidden');
+    $('msgText').textContent = t;
+    $('msg').classList.add('show');
+  }
+  $('retry').addEventListener('click', function () {
+    try { Native.reload(); } catch (e) { location.reload(); }
+  });
+
+  // ---------- Controls ----------
+  function dur() { return ready ? (player.getDuration() || 0) : 0; }
+  function cur() { return ready ? (player.getCurrentTime() || 0) : 0; }
+
+  function togglePlay() {
+    if (!ready) return;
+    if (ended) { player.seekTo(0, true); player.playVideo(); }
+    else if (playing) player.pauseVideo(); else player.playVideo();
+  }
+
+  function seekBy(sec) {
+    if (!ready) return;
+    var d = dur(), t = Math.max(0, Math.min(cur() + sec, d ? d - 0.5 : cur() + sec));
+    player.seekTo(t, true);
+    render(t);
+  }
+
+  function fmt(s) {
+    s = Math.max(0, Math.floor(s));
+    var h = Math.floor(s / 3600), m = Math.floor(s % 3600 / 60), x = s % 60;
+    return (h ? h + ':' + (m < 10 ? '0' : '') : '') + m + ':' + (x < 10 ? '0' : '') + x;
+  }
+
+  function render(t) {
+    var d = dur(), p = d ? Math.min(1, t / d) : 0;
+    prog.style.width = (p * 100) + '%';
+    knob.style.left = (p * 100) + '%';
+    $('time').textContent = fmt(t) + ' / ' + fmt(d);
+  }
+
+  function tick() {
+    clearInterval(tickTimer);
+    tickTimer = setInterval(function () {
+      if (!ready) return;
+      if (!dragging) render(cur());
+      buf.style.width = ((player.getVideoLoadedFraction() || 0) * 100) + '%';
+      save(false);
+    }, 250);
+  }
+
+  function save(force) {
+    var now = Date.now();
+    if (!ready || (!force && now - lastSaved < 5000)) return;
+    lastSaved = now;
+    try { Native.onProgress(cur(), dur()); } catch (e) {}
+  }
+
+  function showUi(stay) {
+    ui.classList.remove('off');
+    if (!stay) scheduleHide();
+  }
+  function hideUi() {
+    if (!playing || dragging) return;
+    ui.classList.add('off');
+    $('menu').classList.remove('show');
+  }
+  function scheduleHide() {
+    clearTimeout(hideTimer);
+    hideTimer = setTimeout(hideUi, 3000);
+  }
+
+  function on(id, fn) {
+    $(id).addEventListener('click', function (e) { e.stopPropagation(); fn(); scheduleHide(); });
+  }
+  on('play', togglePlay);
+  on('back10', function () { seekBy(-SEEK_STEP); flash('l', SEEK_STEP); });
+  on('fwd10', function () { seekBy(SEEK_STEP); flash('r', SEEK_STEP); });
+  on('fs', function () { try { Native.toggleFullscreen(); } catch (e) {} });
+
+  window.setFullscreenIcon = function (fs) {
+    $('fsIcon').setAttribute('d', fs
+      ? 'M5 16h3v3h2v-5H5v2zm3-8H5v2h5V5H8v3zm6 11h2v-3h3v-2h-5v5zm2-11V5h-2v5h5V8h-3z'
+      : 'M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z');
+  };
+  window.pauseVideo = function () { if (ready) player.pauseVideo(); };
+
+  // Speed menu
+  var menu = $('menu');
+  SPEEDS.forEach(function (s) {
+    var d = document.createElement('div');
+    d.textContent = s + 'x';
+    d.dataset.s = s;
+    d.addEventListener('click', function (e) {
+      e.stopPropagation();
+      if (ready) player.setPlaybackRate(s);
+      $('speedBtn').textContent = s + 'x';
+      [].forEach.call(menu.children, function (c) { c.classList.toggle('sel', +c.dataset.s === s); });
+      menu.classList.remove('show');
+      scheduleHide();
+    });
+    if (s === 1) d.className = 'sel';
+    menu.appendChild(d);
+  });
+  on('speedBtn', function () { menu.classList.toggle('show'); });
+
+  // ---------- Seek bar (drag) ----------
+  function barPos(e) {
+    var r = bar.getBoundingClientRect(), x = (e.touches ? e.touches[0] : e).clientX;
+    return Math.max(0, Math.min(1, (x - r.left) / r.width));
+  }
+  function barMove(e) {
+    e.preventDefault();
+    render(barPos(e) * dur());
+  }
+  function barStart(e) {
+    if (!ready) return;
+    e.stopPropagation();
+    dragging = true;
+    clearTimeout(hideTimer);
+    barMove(e);
+  }
+  function barEnd(e) {
+    if (!dragging) return;
+    dragging = false;
+    var t = parseFloat(prog.style.width) / 100 * dur();
+    player.seekTo(t, true);
+    scheduleHide();
+  }
+  bar.addEventListener('touchstart', barStart, { passive: false });
+  bar.addEventListener('touchmove', function (e) { if (dragging) barMove(e); }, { passive: false });
+  bar.addEventListener('touchend', barEnd);
+  bar.addEventListener('mousedown', barStart);
+  document.addEventListener('mousemove', function (e) { if (dragging) barMove(e); });
+  document.addEventListener('mouseup', barEnd);
+
+  // ---------- Tap / double-tap gestures on the shield ----------
+  var lastTap = 0, tapTimer = 0, seekCombo = 0, comboSide = '', comboTimer = 0;
+  var rip = { l: $('rip-l'), r: $('rip-r') };
+
+  function flash(side, total) {
+    var el = rip[side];
+    el.querySelector('span').textContent = total + ' seconds';
+    el.classList.add('show');
+    clearTimeout(el._t);
+    el._t = setTimeout(function () { el.classList.remove('show'); }, 600);
+  }
+
+  function handleTap(x, w) {
+    var now = Date.now();
+    var side = x < w * 0.35 ? 'l' : x > w * 0.65 ? 'r' : 'c';
+
+    // Already in a seek combo: every extra tap on the same side adds another step.
+    if (seekCombo && side === comboSide && now - lastTap < 700) {
+      lastTap = now;
+      seekCombo += SEEK_STEP;
+      seekBy(side === 'l' ? -SEEK_STEP : SEEK_STEP);
+      flash(side, seekCombo);
+      clearTimeout(comboTimer);
+      comboTimer = setTimeout(function () { seekCombo = 0; }, 700);
+      return;
+    }
+
+    if (now - lastTap < 300) {            // double tap
+      clearTimeout(tapTimer);
+      lastTap = 0;
+      if (side === 'c') { togglePlay(); return; }
+      seekCombo = SEEK_STEP; comboSide = side; lastTap = now;
+      seekBy(side === 'l' ? -SEEK_STEP : SEEK_STEP);
+      flash(side, seekCombo);
+      clearTimeout(comboTimer);
+      comboTimer = setTimeout(function () { seekCombo = 0; }, 700);
+      return;
+    }
+
+    lastTap = now;
+    clearTimeout(tapTimer);
+    tapTimer = setTimeout(function () {    // single tap: toggle controls
+      menu.classList.remove('show');
+      if (ui.classList.contains('off')) showUi(!playing); else hideUi();
+    }, 300);
+  }
+
+  var shield = $('shield');
+  shield.addEventListener('touchend', function (e) {
+    e.preventDefault();
+    var t = e.changedTouches[0];
+    handleTap(t.clientX, window.innerWidth);
+  }, { passive: false });
+  shield.addEventListener('click', function (e) { handleTap(e.clientX, window.innerWidth); });
+  // UI layer itself is transparent to taps except on its buttons, so taps go to the shield.
+  ui.addEventListener('touchend', function () {}, { passive: true });
+})();
+</script>
+</body>
+</html>
