@@ -28,13 +28,16 @@ import java.io.ByteArrayInputStream
  *    so logo / title / "Copy link" / long-press menus can never be reached.
  *  - Every navigation or popup out of the player page is blocked.
  *  - No text selection, no context menu, no long press, no WebView debugging.
- *  - FLAG_SECURE blocks screenshots and screen recording.
+ *  - Optional FLAG_SECURE (BLOCK_SCREENSHOTS) blocks screenshots and screen recording.
  */
 class PlayerActivity : Activity() {
 
     companion object {
         const val EXTRA_VIDEO = "video"
         const val EXTRA_TITLE = "title"
+
+        // Set to true before publishing to block screenshots / screen recording.
+        private const val BLOCK_SCREENSHOTS = false
 
         // The player page is served from this https URL by the app itself (intercepted, never
         // fetched from the network). A real https page URL makes WebView send a proper Referer,
@@ -52,7 +55,9 @@ class PlayerActivity : Activity() {
     @SuppressLint("SetJavaScriptEnabled")
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        window.setFlags(WindowManager.LayoutParams.FLAG_SECURE, WindowManager.LayoutParams.FLAG_SECURE)
+        if (BLOCK_SCREENSHOTS) {
+            window.setFlags(WindowManager.LayoutParams.FLAG_SECURE, WindowManager.LayoutParams.FLAG_SECURE)
+        }
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
 
         val id = YouTubeId.parse(intent.getStringExtra(EXTRA_VIDEO).orEmpty())
