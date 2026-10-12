@@ -137,6 +137,7 @@ class PlayerActivity : Activity() {
             override fun onPageFinished(view: WebView, url: String) {
                 if (url != PAGE_URL || pageReady) return
                 pageReady = true
+                js("window.setFullscreenIcon&&setFullscreenIcon($fullscreen)")
                 pendingMessage?.let { js(it) }
                 pendingMessage = null
             }

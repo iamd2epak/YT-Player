@@ -29,11 +29,12 @@
   #ui.off * { pointer-events: none !important; }
   .grad-top, .grad-bot { position: absolute; left: 0; right: 0; }
   .grad-top { top: 0; height: 64px; background: linear-gradient(rgba(0,0,0,.65), transparent); }
-  .grad-bot { bottom: 0; height: 72px; background: linear-gradient(transparent, rgba(0,0,0,.75)); }
+  .grad-bot { bottom: 0; height: 88px; background: linear-gradient(transparent, rgba(0,0,0,.75)); }
 
-  #time { position: absolute; top: 12px; left: 12px; font-size: 12px; font-weight: 500;
+  /* Time sits just above the seek bar, bottom-left */
+  #time { position: absolute; bottom: 32px; left: 12px; font-size: 12px; font-weight: 500;
           font-variant-numeric: tabular-nums; text-shadow: 0 1px 2px #000; }
-  #topRight { position: absolute; top: 6px; right: 8px; display: flex; gap: 6px; }
+  #topRight { position: absolute; top: 8px; right: 14px; display: flex; gap: 8px; }
 
   #center { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
             display: flex; align-items: center; gap: 44px; }
@@ -66,6 +67,18 @@
   .chip:active { background: rgba(255,255,255,.3); }
   .chip.icon { width: 40px; padding: 0; justify-content: center; background: transparent; }
   .chip.icon svg { width: 26px; height: 26px; }
+
+  /* Fullscreen landscape: bigger touch targets, kept away from rounded screen corners */
+  body.fs #topRight { top: 18px; right: 36px; gap: 10px; }
+  body.fs .chip { height: 38px; padding: 0 14px; border-radius: 19px; font-size: 14px; gap: 6px; }
+  body.fs .chip svg { width: 20px; height: 20px; }
+  body.fs #bottom { padding: 0 28px 12px 36px; gap: 10px; }
+  body.fs .chip.icon { width: 48px; height: 48px; }
+  body.fs .chip.icon svg { width: 36px; height: 36px; }
+  body.fs #time { left: 36px; bottom: 58px; font-size: 13px; }
+  body.fs .menu { top: 62px; right: 36px; }
+  body.fs .grad-top { height: 90px; }
+  body.fs .grad-bot { height: 120px; }
 
   /* Small screens (video at the top in portrait): smaller center buttons */
   @media (max-height: 320px) {
@@ -546,6 +559,7 @@
   on('qualChip', function () { openMenu('qualMenu'); });
 
   window.setFullscreenIcon = function (fs) {
+    document.body.classList.toggle('fs', !!fs);
     $('fsIcon').setAttribute('d', fs
       ? 'M5 16h3v3h2v-5H5v2zm3-8H5v2h5V5H8v3zm6 11h2v-3h3v-2h-5v5zm2-11V5h-2v5h5V8h-3z'
       : 'M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z');
