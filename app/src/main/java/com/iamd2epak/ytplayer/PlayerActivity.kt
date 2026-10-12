@@ -15,6 +15,8 @@ import android.graphics.drawable.RippleDrawable
 import android.os.Build
 import android.os.Bundle
 import android.os.Message
+import android.provider.OpenableColumns
+import android.net.Uri
 import android.text.SpannableString
 import android.text.Spanned
 import android.text.TextUtils
@@ -109,6 +111,7 @@ class PlayerActivity : Activity() {
     private lateinit var cardClose: ImageView
     private lateinit var cardProgress: ProgressBar
     private var channel = ""
+    private var directUri: Uri? = null   // normal video: local file or direct link
     private var bgOn = false
     private var videoOff = false
     private var metaFallbackStarted = false
@@ -124,15 +127,19 @@ class PlayerActivity : Activity() {
         }
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
 
+        directUri = intent.data?.takeIf { it.scheme in setOf("content", "file", "http", "https") }
         val id = YouTubeId.parse(intent.getStringExtra(EXTRA_VIDEO).orEmpty())
+            ?: directUri?.let { History.keyFor(it.toString()) }
         if (id == null) {
             Toast.makeText(this, "Invalid video", Toast.LENGTH_SHORT).show()
             finish()
             return
         }
         videoId = id
+        if (YouTubeId.parse(intent.getStringExtra(EXTRA_VIDEO).orEmpty()) != null) directUri = null
         title = intent.getStringExtra(EXTRA_TITLE).orEmpty().ifBlank { History.title(this, id) }
-        History.put(this, id, title)
+            .ifBlank { directUri?.let { displayName(it) }.orEmpty() }
+        History.put(this, id, title, uri = directUri?.toString().orEmpty())
 
         playerView = PlayerView(this).apply {
             useController = false
@@ -194,7 +201,7 @@ class PlayerActivity : Activity() {
         }
         web.addJavascriptInterface(Bridge(), "Android")
 
-        // Portrait: toolbar, 16:9 player, then title + actions (like the YouTube app).
+        // Portrait: toolbar, 16:9 player, then title + actions.
         // Landscape / fullscreen: only the player.
         val match = ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
         playerBox = FrameLayout(this).apply {
@@ -225,6 +232,11 @@ class PlayerActivity : Activity() {
         }
         setContentView(root)
         applyLayout()
+        directUri?.let { uri ->
+            // Normal video: no download, show where it comes from.
+            downloadBtn.visibility = View.GONE
+            renderMeta(if (uri.scheme == "http" || uri.scheme == "https") uri.host.orEmpty() else "On this phone")
+        }
         Downloads.addListener(downloadListener)
         Downloads.latestFor(videoId)?.takeIf { it.active }?.let { renderCard(it) }
 
@@ -282,7 +294,7 @@ class PlayerActivity : Activity() {
             override fun onInfo(info: StreamInfo) = showInfo(info)
             override fun onSaveProgress(positionSec: Double, durationSec: Double) = saveProgress(positionSec, durationSec)
             override fun onFallbackToEmbed(positionSec: Double) = switchToEmbed(positionSec)
-        }).also { it.start(savedPosition()) }
+        }, directUri).also { it.start(savedPosition()) }
     }
 
     /** Last resort: YouTube's own player inside the same page/controls. */
@@ -637,7 +649,7 @@ class PlayerActivity : Activity() {
     }
 
     private fun renderMeta(meta: String) {
-        titleView.text = title.ifBlank { "Untitled video" }
+        titleView.text = title.ifBlank { "Video" }
         metaView.text = meta
         metaView.visibility = if (meta.isBlank()) View.GONE else View.VISIBLE
     }
@@ -651,6 +663,7 @@ class PlayerActivity : Activity() {
 
     /** Title/channel when stream extraction isn't possible (YouTube's public oEmbed API). */
     private fun fetchMetaFallback() {
+        if (directUri != null) return
         if (metaFallbackStarted || stream?.currentInfo != null) return
         metaFallbackStarted = true
         Thread {
@@ -675,6 +688,18 @@ class PlayerActivity : Activity() {
         }.start()
     }
 
+    /** File name (without extension) of a local video, or the last part of a link. */
+    private fun displayName(uri: Uri): String {
+        val name = try {
+            if (uri.scheme == "content") contentResolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)
+                ?.use { c -> if (c.moveToFirst()) c.getString(0) else null }
+            else uri.lastPathSegment
+        } catch (_: Exception) {
+            null
+        } ?: uri.lastPathSegment ?: uri.host ?: return "Video"
+        return name.substringBeforeLast('.').ifBlank { name }
+    }
+
     private fun toast(msg: String) = Toast.makeText(this, msg, Toast.LENGTH_SHORT).show()
 
     // ------------------------------------------------------------------ background play
@@ -689,6 +714,7 @@ class PlayerActivity : Activity() {
         if (bgOn) {
             try {
                 askNotificationPermission()
+                PlaybackService.directUri = directUri
                 PlaybackService.start(this, s.player, videoId, title, channel)
                 toast("Background play on. Leave the app or lock the screen, it keeps playing.")
             } catch (_: Exception) {

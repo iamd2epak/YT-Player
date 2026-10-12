@@ -98,7 +98,7 @@ class DownloadEngine(
     }
 
     private fun refreshUrls(parts: List<Part>) {
-        if (++refreshes > 3) throw DownloadException("YouTube refused the download. Try again later.")
+        if (++refreshes > 3) throw DownloadException("The server refused the download. Try again later.")
         YouTubeStreams.invalidate(job.videoId)
         val info = YouTubeStreams.load(job.videoId, fresh = true)
         parts.forEach { resolveUrl(it, info) }
@@ -144,7 +144,7 @@ class DownloadEngine(
                         403, 410 -> refreshUrls(parts)            // link expired / IP changed
                         429 -> { waitFor(15_000) }               // rate limited
                         in 500..599 -> {
-                            if (++failures > MAX_FAILURES) throw DownloadException("YouTube server error. Try again later.")
+                            if (++failures > MAX_FAILURES) throw DownloadException("Server error. Try again later.")
                             waitFor(backoff(failures))
                         }
                         else -> throw DownloadException("Download failed (HTTP ${res.code}).")

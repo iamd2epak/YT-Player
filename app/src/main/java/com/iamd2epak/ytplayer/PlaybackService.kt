@@ -24,6 +24,7 @@ class PlaybackService : MediaSessionService() {
         @Volatile var videoId = ""
         @Volatile var title = ""
         @Volatile var channel = ""
+        @Volatile var directUri: Uri? = null
         private var instance: PlaybackService? = null
 
         fun start(context: Context, player: Player, videoId: String, title: String, channel: String) {
@@ -58,13 +59,17 @@ class PlaybackService : MediaSessionService() {
             override fun getMediaMetadata(): MediaMetadata = MediaMetadata.Builder()
                 .setTitle(title.ifBlank { getString(R.string.app_name) })
                 .setArtist(channel.ifBlank { getString(R.string.app_name) })
-                .setArtworkUri(Uri.parse("https://i.ytimg.com/vi/$videoId/hqdefault.jpg"))
+                .apply {
+                    // Online videos have a thumbnail; local files don't.
+                    if (YouTubeId.parse(videoId) == videoId) setArtworkUri(Uri.parse("https://i.ytimg.com/vi/$videoId/hqdefault.jpg"))
+                }
                 .build()
         }
         val open = PendingIntent.getActivity(
             this, 0,
             Intent(this, PlayerActivity::class.java)
                 .putExtra(PlayerActivity.EXTRA_VIDEO, videoId)
+                .apply { directUri?.let { setData(it) } }
                 .addFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT or Intent.FLAG_ACTIVITY_SINGLE_TOP),
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
         )

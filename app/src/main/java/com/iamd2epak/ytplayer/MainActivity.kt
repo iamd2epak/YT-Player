@@ -10,6 +10,7 @@ import android.graphics.Outline
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
 import android.graphics.drawable.RippleDrawable
+import android.net.Uri
 import android.os.Bundle
 import android.text.InputType
 import android.text.SpannableString
@@ -37,6 +38,7 @@ class MainActivity : Activity() {
     private companion object {
         const val ACCENT = "#E53935"
         const val CARD = "#2A2A3C"
+        const val RC_PICK = 21
     }
 
     private val dp = { v: Int -> TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, v.toFloat(), resources.displayMetrics).toInt() }
@@ -66,15 +68,35 @@ class MainActivity : Activity() {
             setPadding(0, dp(8), 0, 0)
         })
         column.addView(TextView(this).apply {
-            text = "Ad-free YouTube player. Paste a link, or share a video to this app."
+            text = "Simple, ad-free video player. Open a video, paste a link, or share one to this app."
             setTextColor(Color.parseColor("#9A9AAE"))
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
             setPadding(0, dp(4), 0, dp(18))
         })
 
-        // ---- Paste a YouTube link and play ----
+        // ---- Open a video file ----
+        column.addView(LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(dp(16), 0, dp(16), 0)
+            background = RippleDrawable(ColorStateList.valueOf(Color.parseColor("#33FFFFFF")), rounded(ACCENT), rounded("#FFFFFF"))
+            isClickable = true
+            setOnClickListener { pickVideo() }
+            addView(ImageView(this@MainActivity).apply {
+                setImageResource(R.drawable.ic_folder)
+                imageTintList = ColorStateList.valueOf(Color.WHITE)
+            }, LinearLayout.LayoutParams(dp(22), dp(22)).apply { marginEnd = dp(12) })
+            addView(TextView(this@MainActivity).apply {
+                text = "Open video from phone"
+                setTextColor(Color.WHITE)
+                setTextSize(TypedValue.COMPLEX_UNIT_SP, 16f)
+                typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
+            })
+        }, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(52)).apply { bottomMargin = dp(14) })
+
+        // ---- Paste a video link and play ----
         val input = EditText(this).apply {
-            hint = "Paste YouTube link"
+            hint = "Paste video link"
             setHintTextColor(Color.parseColor("#888899"))
             setTextColor(Color.WHITE)
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 15f)
@@ -89,7 +111,7 @@ class MainActivity : Activity() {
             val text = clip?.takeIf { it.itemCount > 0 }?.getItemAt(0)?.coerceToText(this)?.toString().orEmpty()
             if (text.isBlank()) toast("Clipboard is empty") else input.setText(text.trim())
         }
-        val play = button("Play", ACCENT) { playLink(input.text.toString()) }
+        val play = button("Play", "#3A3A50") { playLink(input.text.toString()) }
         input.setOnEditorActionListener { _, actionId, _ ->
             if (actionId == EditorInfo.IME_ACTION_GO) { playLink(input.text.toString()); true } else false
         }
@@ -129,7 +151,7 @@ class MainActivity : Activity() {
             addView(clearAll)
         })
         empty = TextView(this).apply {
-            text = "No videos yet.\nShare a video from the YouTube app to MuteAd Tube, or paste a link above."
+            text = "No videos yet.\nOpen a video, paste a link, or share a video to MuteAd Tube."
             setTextColor(Color.parseColor("#888899"))
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
             gravity = Gravity.CENTER
@@ -170,7 +192,7 @@ class MainActivity : Activity() {
             }
             clipToOutline = true
         }
-        Thumbs.load(thumb, item.id)
+        Thumbs.load(thumb, item.id, item.uri)
         val thumbBox = FrameLayout(this).apply {
             addView(thumb, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
             if (item.durationSec > 0) addView(TextView(this@MainActivity).apply {
@@ -186,7 +208,7 @@ class MainActivity : Activity() {
         val texts = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             addView(TextView(this@MainActivity).apply {
-                text = item.title.ifBlank { "YouTube video" }
+                text = item.title.ifBlank { "Video" }
                 setTextColor(Color.WHITE)
                 setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
                 maxLines = 2
@@ -222,7 +244,7 @@ class MainActivity : Activity() {
             setPadding(dp(8), dp(8), dp(2), dp(8))
             background = RippleDrawable(ColorStateList.valueOf(Color.parseColor("#22FFFFFF")), rounded(CARD), rounded("#FFFFFF"))
             isClickable = true
-            setOnClickListener { open(item.id, item.title) }
+            setOnClickListener { open(item) }
             addView(thumbBox, LinearLayout.LayoutParams(dp(128), dp(72)))
             addView(texts, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply {
                 marginStart = dp(12)
@@ -246,17 +268,41 @@ class MainActivity : Activity() {
     }
 
     private fun playLink(text: String) {
-        if (text.isBlank()) return toast("Paste a YouTube link first")
-        val id = YouTubeId.parse(text) ?: return toast("That doesn't look like a YouTube link")
-        open(id, "")
+        if (text.isBlank()) return toast("Paste a video link first")
+        val intent = LinkActivity.playerIntentForText(this, text.trim()) ?: return toast("That doesn't look like a video link")
+        start(intent)
     }
 
-    private fun open(video: String, title: String) {
-        startActivity(
-            Intent(this, PlayerActivity::class.java)
-                .putExtra(PlayerActivity.EXTRA_VIDEO, video)
-                .putExtra(PlayerActivity.EXTRA_TITLE, title)
-        )
+    private fun open(item: History.Item) {
+        val intent = Intent(this, PlayerActivity::class.java).putExtra(PlayerActivity.EXTRA_TITLE, item.title)
+        if (item.uri.isNotBlank()) intent.setData(Uri.parse(item.uri)) else intent.putExtra(PlayerActivity.EXTRA_VIDEO, item.id)
+        start(intent)
+    }
+
+    private fun start(intent: Intent) {
+        try { startActivity(intent) } catch (_: Exception) { toast("Can't open this video") }
+    }
+
+    private fun pickVideo() {
+        val pick = Intent(Intent.ACTION_OPEN_DOCUMENT)
+            .addCategory(Intent.CATEGORY_OPENABLE)
+            .setType("video/*")
+            .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION)
+        try {
+            startActivityForResult(pick, RC_PICK)
+        } catch (_: Exception) {
+            toast("No file manager found")
+        }
+    }
+
+    @Deprecated("Deprecated in Java")
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+        val uri = data?.data
+        if (requestCode != RC_PICK || resultCode != RESULT_OK || uri == null) return
+        // Keep access so the video can be reopened from History later.
+        try { contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION) } catch (_: Exception) {}
+        start(Intent(this, PlayerActivity::class.java).setData(uri).addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION))
     }
 
     private fun button(label: String, color: String, onClick: () -> Unit) = Button(this).apply {

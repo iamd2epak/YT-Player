@@ -2,6 +2,7 @@ package com.iamd2epak.ytplayer
 
 import android.app.ActivityManager
 import android.content.Context
+import android.net.Uri
 import android.net.ConnectivityManager
 import android.net.Network
 import android.os.Handler
@@ -17,10 +18,13 @@ import androidx.media3.common.Player
 import androidx.media3.common.TrackSelectionOverride
 import androidx.media3.common.Tracks
 import androidx.media3.common.util.UnstableApi
+import androidx.media3.datasource.DefaultDataSource
 import androidx.media3.datasource.HttpDataSource
+import androidx.media3.datasource.okhttp.OkHttpDataSource
 import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.hls.HlsMediaSource
+import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.exoplayer.source.MediaSource
 import androidx.media3.exoplayer.source.MergingMediaSource
 import androidx.media3.exoplayer.source.ProgressiveMediaSource
@@ -43,7 +47,10 @@ import java.util.concurrent.Executors
  *   1. HLS        – adaptive, seamless quality switching (best)
  *   2. Separate   – video-only + audio progressive files, quality = choose file
  *   3. Combined   – single 360p file with audio
- * If all fail (or YouTube blocks extraction) the activity falls back to the YouTube embed.
+ * If all fail (or extraction is blocked) the activity falls back to the embedded web player.
+ *
+ * With [directUri] it plays a normal video instead: a local file (content:// / file://) or a
+ * direct http(s) link (MP4, MKV, WebM, HLS, DASH...). No extraction, no fallback.
  */
 @OptIn(UnstableApi::class)
 class StreamPlayer(
@@ -51,6 +58,7 @@ class StreamPlayer(
     private val view: PlayerView,
     private val videoId: String,
     private val listener: Listener,
+    private val directUri: Uri? = null,
 ) {
     interface Listener {
         fun onStatus(text: String)
@@ -61,7 +69,7 @@ class StreamPlayer(
         fun onInfo(info: StreamInfo) {}
     }
 
-    private enum class Plan(val label: String) { HLS("HLS"), SEPARATE("Direct"), COMBINED("Basic") }
+    private enum class Plan(val label: String) { HLS("HLS"), SEPARATE("Direct"), COMBINED("Basic"), FILE("File") }
 
     private val main = Handler(Looper.getMainLooper())
     private val worker = Executors.newSingleThreadExecutor()
@@ -152,7 +160,11 @@ class StreamPlayer(
     // ------------------------------------------------------------------ loading
 
     fun start(startSec: Double) {
-        load(startSec, fresh = false)
+        if (directUri != null) {
+            plans = listOf(Plan.FILE)
+            planIndex = 0
+            playCurrentPlan(startSec)
+        } else load(startSec, fresh = false)
         main.post(ticker)
         registerNetworkCallback()
     }
@@ -160,6 +172,10 @@ class StreamPlayer(
     /** Retry button: refetch everything and continue where we were. */
     fun retry() {
         val pos = positionSec()
+        if (directUri != null) {
+            playCurrentPlan(pos)
+            return
+        }
         info = null
         planIndex = 0
         load(pos, fresh = true)
@@ -210,12 +226,15 @@ class StreamPlayer(
     }
 
     private fun playCurrentPlan(startSec: Double) {
-        val info = info ?: return
         val plan = plans[planIndex]
-        val source: MediaSource = when (plan) {
+        val source: MediaSource = if (plan == Plan.FILE) {
+            val http = OkHttpDataSource.Factory(YouTubeStreams.http)
+            DefaultMediaSourceFactory(DefaultDataSource.Factory(context, http))
+                .createMediaSource(MediaItem.fromUri(directUri!!))
+        } else when (plan) {
             Plan.HLS -> HlsMediaSource.Factory(dataSource)
                 .setAllowChunklessPreparation(true)
-                .createMediaSource(MediaItem.fromUri(info.hlsUrl))
+                .createMediaSource(MediaItem.fromUri(info!!.hlsUrl))
 
             Plan.SEPARATE -> {
                 val video = chooseSeparateVideo()
@@ -227,8 +246,9 @@ class StreamPlayer(
                 )
             }
 
+            Plan.FILE -> return
             Plan.COMBINED -> progressive(
-                info.videoStreams.filter { it.deliveryMethod == DeliveryMethod.PROGRESSIVE_HTTP }
+                info!!.videoStreams.filter { it.deliveryMethod == DeliveryMethod.PROGRESSIVE_HTTP }
                     .maxBy { it.height }.content
             )
         }
@@ -249,6 +269,8 @@ class StreamPlayer(
         val pos = positionSec()
         val http = generateSequence(error.cause) { it.cause }
             .filterIsInstance<HttpDataSource.InvalidResponseCodeException>().firstOrNull()?.responseCode
+
+        if (directUri != null) return handleFileError(error, http)
 
         when {
             // Offline / flaky network: keep the plan, wait and resume.
@@ -271,6 +293,29 @@ class StreamPlayer(
             // Decoder / format / anything else: try the next plan.
             else -> nextPlan(pos)
         }
+    }
+
+    /** Normal videos: wait for the network, otherwise explain what's wrong. */
+    private fun handleFileError(error: PlaybackException, http: Int?) {
+        val code = error.errorCode
+        if (code == PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_FAILED ||
+            code == PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_TIMEOUT
+        ) {
+            waitingForNetwork = true
+            listener.onStatus("No internet. Waiting for connection...")
+            main.postDelayed({ if (waitingForNetwork && !released) player.prepare() }, 5000)
+            return
+        }
+        listener.onError(when {
+            code == PlaybackException.ERROR_CODE_IO_FILE_NOT_FOUND -> "This video file was moved or deleted."
+            code == PlaybackException.ERROR_CODE_IO_NO_PERMISSION -> "No permission to open this file. Open it again from your files."
+            http != null -> "Couldn't open this link (error $http)."
+            code == PlaybackException.ERROR_CODE_IO_BAD_HTTP_STATUS -> "Couldn't open this link."
+            code == PlaybackException.ERROR_CODE_PARSING_CONTAINER_UNSUPPORTED ||
+                code == PlaybackException.ERROR_CODE_PARSING_CONTAINER_MALFORMED -> "This file isn't a playable video."
+            code in 4000..4999 -> "This video format isn't supported on your phone."
+            else -> "Can't play this video."
+        })
     }
 
     private fun nextPlan(pos: Double) {
@@ -299,7 +344,7 @@ class StreamPlayer(
             main.post {
                 if (released || !waitingForNetwork) return@post
                 waitingForNetwork = false
-                if (info == null) load(positionSec(), fresh = true) else player.prepare()
+                if (info == null && directUri == null) load(positionSec(), fresh = true) else player.prepare()
             }
         }
     }
@@ -356,7 +401,7 @@ class StreamPlayer(
     fun setQuality(id: String) {
         selectedQuality = id
         when (plans.getOrNull(planIndex)) {
-            Plan.HLS -> applyHlsQuality()
+            Plan.HLS, Plan.FILE -> applyHlsQuality()
             Plan.SEPARATE -> {
                 if (id == "auto") autoCap = autoMax
                 val wasPlaying = player.playWhenReady
@@ -421,13 +466,13 @@ class StreamPlayer(
 
     private fun qualityOptions(): List<Pair<String, String>> {
         val sides = when (plans.getOrNull(planIndex)) {
-            Plan.HLS -> hlsVideoTracks().map { it.third }
+            Plan.HLS, Plan.FILE -> hlsVideoTracks().map { it.third }
             Plan.SEPARATE -> separateVideos.map { shortSide(it) }
             else -> emptyList()
         }
         val maxOffered = if (lowEnd) 1080 else 2160 // 1440p/4K would stutter on low-end phones
         val offered = sides.filter { it <= maxOffered }
-        if (offered.isEmpty()) return emptyList()
+        if (offered.isEmpty() || (directUri != null && offered.size < 2)) return emptyList()
         return listOf("auto" to "Auto") + offered.map { it.toString() to "${it}p" }
     }
 
@@ -477,7 +522,7 @@ class StreamPlayer(
     }
 
     private fun pushState() {
-        if (released || info == null) return
+        if (released || (info == null && directUri == null)) return
         val state = when {
             player.playbackState == Player.STATE_ENDED -> "ended"
             player.playbackState == Player.STATE_BUFFERING -> "buffering"
@@ -504,7 +549,7 @@ class StreamPlayer(
 
     private fun save(force: Boolean) {
         val now = System.currentTimeMillis()
-        if (info == null || (!force && now - lastSavedAt < 5000)) return
+        if ((info == null && directUri == null) || (!force && now - lastSavedAt < 5000)) return
         lastSavedAt = now
         listener.onSaveProgress(positionSec(), durationSec())
     }

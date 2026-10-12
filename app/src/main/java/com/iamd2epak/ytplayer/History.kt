@@ -6,7 +6,8 @@ import org.json.JSONObject
 
 /** Recently played videos (newest first), kept in SharedPreferences. */
 object History {
-    data class Item(val id: String, val title: String, val channel: String, val durationSec: Long, val time: Long)
+    /** [uri] is set for normal videos (files / direct links); [id] is then a local key. */
+    data class Item(val id: String, val title: String, val channel: String, val durationSec: Long, val time: Long, val uri: String = "")
 
     private const val PREFS = "history"
     private const val KEY = "items"
@@ -19,8 +20,10 @@ object History {
             val arr = JSONArray(raw)
             (0 until arr.length()).mapNotNull { i ->
                 val o = arr.optJSONObject(i) ?: return@mapNotNull null
-                val id = YouTubeId.parse(o.optString("id")) ?: return@mapNotNull null
-                Item(id, o.optString("title"), o.optString("channel"), o.optLong("duration"), o.optLong("time"))
+                val uri = o.optString("uri")
+                val id = if (uri.isNotBlank()) o.optString("id").ifBlank { null } else YouTubeId.parse(o.optString("id"))
+                id ?: return@mapNotNull null
+                Item(id, o.optString("title"), o.optString("channel"), o.optLong("duration"), o.optLong("time"), uri)
             }
         } catch (_: Exception) {
             emptyList() // corrupted data: start fresh rather than crash
@@ -29,7 +32,7 @@ object History {
 
     /** Adds or moves a video to the top; empty fields keep their previous value. */
     @Synchronized
-    fun put(context: Context, id: String, title: String = "", channel: String = "", durationSec: Long = 0) {
+    fun put(context: Context, id: String, title: String = "", channel: String = "", durationSec: Long = 0, uri: String = "") {
         val list = all(context).toMutableList()
         val old = list.firstOrNull { it.id == id }
         list.removeAll { it.id == id }
@@ -39,8 +42,15 @@ object History {
             channel.ifBlank { old?.channel.orEmpty() },
             if (durationSec > 0) durationSec else old?.durationSec ?: 0,
             System.currentTimeMillis(),
+            uri.ifBlank { old?.uri.orEmpty() },
         ))
         save(context, list.take(MAX))
+    }
+
+    /** Stable key for a normal video's history entry and saved position. */
+    fun keyFor(uri: String): String {
+        val digest = java.security.MessageDigest.getInstance("SHA-1").digest(uri.toByteArray())
+        return "f_" + digest.take(10).joinToString("") { "%02x".format(it) }
     }
 
     /** Updates details without moving the item. */
@@ -69,7 +79,7 @@ object History {
         val arr = JSONArray()
         list.forEach {
             arr.put(JSONObject().put("id", it.id).put("title", it.title).put("channel", it.channel)
-                .put("duration", it.durationSec).put("time", it.time))
+                .put("duration", it.durationSec).put("time", it.time).put("uri", it.uri))
         }
         prefs(context).edit().putString(KEY, arr.toString()).apply()
     }

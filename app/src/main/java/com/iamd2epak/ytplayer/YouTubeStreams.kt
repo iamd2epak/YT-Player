@@ -94,7 +94,7 @@ object YouTubeStreams {
 
     private fun toStreamException(t: Throwable?): StreamException = when (t) {
         is PrivateContentException ->
-            StreamException("This video is private. Make it Unlisted in YouTube Studio.", false, t)
+            StreamException("This video is private and can't be played.", false, t)
         is AgeRestrictedContentException ->
             StreamException("This video is age-restricted and can't be played in the app.", false, t)
         is GeographicRestrictionException ->
@@ -102,7 +102,7 @@ object YouTubeStreams {
         is PaidContentException ->
             StreamException("This video requires a paid membership.", false, t)
         is SignInConfirmNotBotException, is ReCaptchaException ->
-            StreamException("YouTube is temporarily limiting this network. Try again later or switch Wi-Fi / mobile data.", true, t)
+            StreamException("The video server is temporarily limiting this network. Try again later or switch Wi-Fi / mobile data.", true, t)
         is ContentNotAvailableException ->
             StreamException("This video is unavailable or was removed.", false, t)
         is InterruptedIOException, is IOException ->

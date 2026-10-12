@@ -8,7 +8,7 @@ android {
     compileSdk = 35
 
     defaultConfig {
-        applicationId = "com.iamd2epak.ytplayer"
+        applicationId = "com.iamd2epak.muteadtube"
         minSdk = 24
         targetSdk = 35
         // CI passes the run number so every release installs as an update.

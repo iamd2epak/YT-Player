@@ -1,11 +1,12 @@
 # MuteAd Tube
 
-Android app that plays YouTube videos in its own clean player: no ads, no YouTube UI.
+Simple, ad-free video player for Android.
 
 ## Features
 - Own player: quality (Auto, 1080p – 144p), speed (0.5x – 2x), hold for 1.75x, double-tap ±10s
-- Share any video from the YouTube app → opens here
-- Download in any quality (MP4) or audio only, with notification progress
+- Plays videos from your phone, any direct video link (MP4, MKV, WebM, HLS, DASH) or shared links
+- "Open with" / Share → MuteAd Tube from any app
+- Download online videos in any quality (MP4) or audio only, with notification progress
 - Background play: keeps playing with the app closed or screen locked
 - History with thumbnails; resumes where you left off
 
@@ -22,6 +23,5 @@ Add these repo secrets so every APK has the same key and updates install cleanly
 Without them, builds use a temporary debug key (uninstall before updating).
 
 ## Notes
-- Streams via NewPipeExtractor + ExoPlayer; falls back to the YouTube embed if needed.
-- Uses YouTube's internal streams (against YouTube ToS). If playback breaks, update NewPipeExtractor in `app/build.gradle.kts`.
+- Playback via ExoPlayer; online links are resolved with NewPipeExtractor. If online playback breaks, update it in `app/build.gradle.kts`.
 - License: GPL-3.0 (required by NewPipeExtractor).
