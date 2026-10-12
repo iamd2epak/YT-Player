@@ -1,16 +1,33 @@
 name: Build APK
 
+# Builds only on main (code changes) or when run manually; replaces the previous release.
 on:
   push:
-    branches: ["**"]
-  pull_request:
+    branches: [main]
+    paths-ignore: ["**.md", "LICENSE"]
   workflow_dispatch:
 
+permissions:
+  contents: read
+
+concurrency:
+  group: build-apk
+  cancel-in-progress: true
+
 jobs:
-  build:
+  release:
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
+    permissions:
+      contents: write   # create the release
+      actions: write    # delete old artifacts
+    env:
+      GH_TOKEN: ${{ github.token }}
+      TAG: latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
 
       - uses: actions/setup-java@v4
         with:
@@ -19,19 +36,37 @@ jobs:
 
       - uses: gradle/actions/setup-gradle@v4
 
-      - name: Build APKs
+      - name: Load signing key (optional)
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+        run: |
+          if [ -n "$KEYSTORE_BASE64" ]; then
+            echo "$KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/release.jks"
+            echo "SIGNING_KEYSTORE=$RUNNER_TEMP/release.jks" >> "$GITHUB_ENV"
+          else
+            echo "::warning::No KEYSTORE_BASE64 secret: signing with a temporary debug key."
+          fi
+
+      - name: Build release APK
+        env:
+          VERSION_CODE: ${{ github.run_number }}
+          SIGNING_STORE_PASSWORD: ${{ secrets.SIGNING_STORE_PASSWORD }}
+          SIGNING_KEY_ALIAS: ${{ secrets.SIGNING_KEY_ALIAS }}
+          SIGNING_KEY_PASSWORD: ${{ secrets.SIGNING_KEY_PASSWORD }}
         run: |
           chmod +x gradlew
-          ./gradlew assembleRelease assembleDebug --no-daemon
+          ./gradlew assembleRelease --no-daemon
+          cp app/build/outputs/apk/release/app-release.apk CoursePlayer.apk
+          rm -f "$RUNNER_TEMP/release.jks"
 
-      - name: Upload release APK
-        uses: actions/upload-artifact@v4
-        with:
-          name: CoursePlayer-release-apk
-          path: app/build/outputs/apk/release/*.apk
+      - name: Replace old release
+        run: |
+          gh release delete "$TAG" --cleanup-tag --yes -R "$GITHUB_REPOSITORY" || true
+          gh release create "$TAG" CoursePlayer.apk -R "$GITHUB_REPOSITORY" \
+            --target "$GITHUB_SHA" --title "Course Player (build ${{ github.run_number }})" \
+            --notes "Latest APK from commit ${GITHUB_SHA::7}."
 
-      - name: Upload debug APK
-        uses: actions/upload-artifact@v4
-        with:
-          name: CoursePlayer-debug-apk
-          path: app/build/outputs/apk/debug/*.apk
+      - name: Delete old workflow artifacts
+        run: |
+          gh api "repos/$GITHUB_REPOSITORY/actions/artifacts" --paginate -q '.artifacts[].id' |
+            xargs -r -I{} gh api -X DELETE "repos/$GITHUB_REPOSITORY/actions/artifacts/{}"

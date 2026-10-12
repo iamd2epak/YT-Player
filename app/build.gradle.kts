@@ -11,8 +11,20 @@ android {
         applicationId = "com.iamd2epak.ytplayer"
         minSdk = 24
         targetSdk = 35
-        versionCode = 1
-        versionName = "1.0"
+        // CI passes the run number so every release installs as an update.
+        versionCode = System.getenv("VERSION_CODE")?.toIntOrNull() ?: 1
+        versionName = "1.0.${System.getenv("VERSION_CODE") ?: "0"}"
+    }
+
+    // Release key comes from env vars (GitHub secrets) — never commit a keystore.
+    val keystore = System.getenv("SIGNING_KEYSTORE")?.let { file(it) }?.takeIf { it.exists() }
+    signingConfigs {
+        if (keystore != null) create("release") {
+            storeFile = keystore
+            storePassword = System.getenv("SIGNING_STORE_PASSWORD")
+            keyAlias = System.getenv("SIGNING_KEY_ALIAS")
+            keyPassword = System.getenv("SIGNING_KEY_PASSWORD")
+        }
     }
 
     buildTypes {
@@ -20,9 +32,8 @@ android {
             // The stream extractor uses reflection + an embedded JS engine; keep it unminified for reliability.
             isMinifyEnabled = false
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
-            // Signed with the debug key so the CI APK installs directly.
-            // Replace with your own signingConfig before publishing to Play Store.
-            signingConfig = signingConfigs.getByName("debug")
+            // Falls back to the debug key when no release key is configured.
+            signingConfig = signingConfigs.findByName("release") ?: signingConfigs.getByName("debug")
         }
     }
 

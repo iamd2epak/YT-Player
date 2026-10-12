@@ -7,3 +7,8 @@ local.properties
 captures/
 *.keystore
 *.jks
+.kotlin/
+*.apk
+*.aab
+.env
+*.p12
