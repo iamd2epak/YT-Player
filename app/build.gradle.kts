@@ -4,11 +4,11 @@ plugins {
 }
 
 android {
-    namespace = "com.iamd2epak.ytplayer"
+    namespace = "com.mutetube.app"
     compileSdk = 35
 
     defaultConfig {
-        applicationId = "com.iamd2epak.muteadtube"
+        applicationId = "com.mutetube.app"
         minSdk = 24
         targetSdk = 35
         // CI passes the run number so every release installs as an update.

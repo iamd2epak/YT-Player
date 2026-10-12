@@ -1,4 +1,4 @@
-package com.iamd2epak.ytplayer
+package com.mutetube.app
 
 /** Extracts a YouTube video ID from a bare ID, a link, or shared text containing a link. */
 object YouTubeId {
