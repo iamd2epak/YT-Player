@@ -58,6 +58,7 @@ class StreamPlayer(
         fun onError(message: String)
         fun onFallbackToEmbed(positionSec: Double)
         fun onSaveProgress(positionSec: Double, durationSec: Double)
+        fun onInfo(info: StreamInfo) {}
     }
 
     private enum class Plan(val label: String) { HLS("HLS"), SEPARATE("Direct"), COMBINED("Basic") }
@@ -94,9 +95,11 @@ class StreamPlayer(
             true,
         )
         .setHandleAudioBecomingNoisy(true)
+        .setWakeMode(C.WAKE_MODE_NETWORK) // keeps playing with the screen off (background play)
         .build()
 
     private var info: StreamInfo? = null
+    val currentInfo: StreamInfo? get() = info
     private var plans = listOf<Plan>()
     private var planIndex = 0
     private var refreshedThisPlan = false
@@ -165,7 +168,7 @@ class StreamPlayer(
     private fun load(startSec: Double, fresh: Boolean) {
         if (released || loading) return
         loading = true
-        listener.onStatus(if (fresh) "Reconnecting..." else "Loading lecture...")
+        listener.onStatus(if (fresh) "Reconnecting..." else "Loading video...")
         worker.execute {
             val result = runCatching { YouTubeStreams.load(videoId, fresh) }
             main.post {
@@ -190,6 +193,7 @@ class StreamPlayer(
 
     private fun onInfo(newInfo: StreamInfo, startSec: Double) {
         info = newInfo
+        listener.onInfo(newInfo)
         separateVideos = pickVideoStreams(newInfo.videoOnlyStreams)
         separateAudio = pickAudioStream(newInfo.audioStreams)
         plans = buildList {
@@ -436,6 +440,14 @@ class StreamPlayer(
     }
 
     fun pause() = player.pause()
+
+    /** Background play: stop decoding/downloading video while nothing is on screen. */
+    fun setVideoEnabled(enabled: Boolean) {
+        if (released) return
+        player.trackSelectionParameters = player.trackSelectionParameters.buildUpon()
+            .setTrackTypeDisabled(C.TRACK_TYPE_VIDEO, !enabled)
+            .build()
+    }
 
     fun seekTo(sec: Double) {
         lastSeekAt = System.currentTimeMillis()

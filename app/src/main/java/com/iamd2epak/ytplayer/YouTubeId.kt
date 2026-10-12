@@ -1,22 +1,11 @@
 package com.iamd2epak.ytplayer
 
-data class Lecture(val title: String, val video: String)
-
-/**
- * Your course lectures. `video` can be a bare 11-char YouTube ID or any YouTube link
- * (youtu.be/..., watch?v=..., /embed/..., /shorts/...). Unlisted videos work.
- * The link is never shown to the user; only the ID is passed into the private player.
- */
-object Lectures {
-    val all = listOf(
-        Lecture("Lecture 1 - Introduction", "https://youtu.be/JEla_mdlfxs"),
-    )
-}
-
+/** Extracts a YouTube video ID from a bare ID, a link, or shared text containing a link. */
 object YouTubeId {
     private val ID = Regex("^[A-Za-z0-9_-]{11}$")
+    private val HOSTS = Regex("(?:^|[^A-Za-z0-9.-])(?:(?:www|m|music)\\.)?(?:youtube\\.com|youtube-nocookie\\.com|youtu\\.be)/", RegexOption.IGNORE_CASE)
     private val PATTERNS = listOf(
-        Regex("youtu\\.be/([A-Za-z0-9_-]{11})"),
+        Regex("youtu\\.be/([A-Za-z0-9_-]{11})", RegexOption.IGNORE_CASE),
         Regex("[?&]v=([A-Za-z0-9_-]{11})"),
         Regex("/(?:embed|shorts|live|v)/([A-Za-z0-9_-]{11})"),
     )
@@ -25,6 +14,9 @@ object YouTubeId {
     fun parse(input: String): String? {
         val s = input.trim()
         if (ID.matches(s)) return s
+        if (!HOSTS.containsMatchIn(s)) return null // only YouTube links
         return PATTERNS.firstNotNullOfOrNull { it.find(s)?.groupValues?.get(1) }
     }
+
+    fun thumbnail(id: String) = "https://i.ytimg.com/vi/$id/mqdefault.jpg"
 }

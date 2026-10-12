@@ -56,14 +56,14 @@ jobs:
         run: |
           chmod +x gradlew
           ./gradlew assembleRelease --no-daemon
-          cp app/build/outputs/apk/release/app-release.apk CoursePlayer.apk
+          cp app/build/outputs/apk/release/app-release.apk MuteAdTube.apk
           rm -f "$RUNNER_TEMP/release.jks"
 
       - name: Replace old release
         run: |
           gh release delete "$TAG" --cleanup-tag --yes -R "$GITHUB_REPOSITORY" || true
-          gh release create "$TAG" CoursePlayer.apk -R "$GITHUB_REPOSITORY" \
-            --target "$GITHUB_SHA" --title "Course Player (build ${{ github.run_number }})" \
+          gh release create "$TAG" MuteAdTube.apk -R "$GITHUB_REPOSITORY" \
+            --target "$GITHUB_SHA" --title "MuteAd Tube (build ${{ github.run_number }})" \
             --notes "Latest APK from commit ${GITHUB_SHA::7}."
 
       - name: Delete old workflow artifacts

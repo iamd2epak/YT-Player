@@ -197,7 +197,7 @@
   <div id="boost">1.75x &#9654;&#9654;</div>
   <div id="toast"></div>
   <div id="spinner"></div>
-  <div id="loading">Loading lecture...</div>
+  <div id="loading">Loading video...</div>
   <div id="msg" class="fill"><div id="msgText"></div><button class="chip" id="retry">Retry</button></div>
 
 <script>
@@ -316,7 +316,7 @@
     document.documentElement.classList.remove('native');
     layout();
     window.addEventListener('resize', layout);
-    window.nativeStatus('Loading lecture...');
+    window.nativeStatus('Loading video...');
     setQualityOptions([], '', '', 'embed');
     watchdog = setTimeout(function () {
       if (!ready) showError('Video is taking too long to load. Check your internet and retry.');
@@ -688,7 +688,7 @@
     E = NativeEngine;
     document.body.classList.add('native');
     document.documentElement.classList.add('native');
-    window.nativeStatus('Loading lecture...');
+    window.nativeStatus('Loading video...');
   }
 })();
 </script>
