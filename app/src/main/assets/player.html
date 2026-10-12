@@ -110,6 +110,8 @@
   #msg { z-index: 50; display: none; background: #000; flex-direction: column; align-items: center;
          justify-content: center; gap: 16px; text-align: center; padding: 24px; font-size: 15px; }
   #msg.show { display: flex; }
+  html.native, body.native { background: transparent; }
+  body.native #stage, body.native #cover { display: none; }
   #retry { background: #e53935; }
 </style>
 </head>
@@ -169,7 +171,8 @@
       <h4>Playback speed <span id="speedNow">1x</span></h4>
       <div class="opts" id="speedOpts"></div>
       <h4>Quality <span id="qualNow">Auto</span></h4>
-      <div id="qNote">Quality is chosen automatically by YouTube based on your internet speed and screen size.</div>
+      <div class="opts" id="qualOpts"></div>
+      <div id="qNote"></div>
     </div>
   </div>
 
@@ -184,6 +187,7 @@
   var VIDEO_ID = '{{VIDEO_ID}}';
   var START_AT = Number('{{START_AT}}') || 0;
   var TITLE = decodeURIComponent('{{TITLE}}');
+  var MODE = '{{MODE}}';           // 'native' = our stream player, 'embed' = YouTube iframe fallback
   var SEEK_STEP = 10;
   var SPEEDS = [0.5, 0.75, 1, 1.25, 1.5, 1.75, 2];
   var Q_NAMES = { hd2160: '2160p', hd1440: '1440p', hd1080: '1080p', hd720: '720p', large: '480p',
@@ -191,7 +195,7 @@
 
   var Native = window.Android || {
     onProgress: function () {}, reload: function () { location.reload(); },
-    toggleFullscreen: function () {}
+    toggleFullscreen: function () {}, cmd: function () {}
   };
 
   var $ = function (id) { return document.getElementById(id); };
@@ -200,9 +204,9 @@
       knob = bar.querySelector('.knob');
   $('title').textContent = TITLE;
 
-  var player = null, ready = false, playing = false, ended = false, dragging = false;
-  var hideTimer = 0, tickTimer = 0, lastSaved = 0;
-  var speed = 1;
+  var E = null;                    // active engine
+  var ready = false, playing = false, ended = false, dragging = false, lastState = '';
+  var hideTimer = 0, tickTimer = 0, lastSaved = 0, speed = 1;
 
   // ---------- Hard-block anything that could leak the video link ----------
   ['contextmenu', 'selectstart', 'dragstart', 'copy', 'cut'].forEach(function (ev) {
@@ -210,85 +214,164 @@
   });
   window.open = function () { return null; };
 
-  // ---------- Layout: oversize + crop the iframe ----------
-  // YouTube draws its logo / title / badges at the edges of the *iframe*. We make the iframe
-  // larger than the screen only along the side where the video has black bars, so the video
-  // itself stays the same size while those edges (and YouTube's branding) fall off-screen.
+  // =====================================================================
+  //  Engine 1: native stream player (ExoPlayer in the app, under this page)
+  // =====================================================================
+  var ns = { t: 0, d: 0, buf: 0, seekUntil: 0, seekT: 0 };
+  var NativeEngine = {
+    name: 'native',
+    play: function () { Native.cmd('play', ''); },
+    pause: function () { Native.cmd('pause', ''); },
+    seek: function (t) { ns.t = t; ns.seekT = t; ns.seekUntil = Date.now() + 700; Native.cmd('seek', String(t)); },
+    setRate: function (r) { Native.cmd('rate', String(r)); },
+    setQuality: function (id) { Native.cmd('quality', id); },
+    time: function () { return ns.t; },
+    duration: function () { return ns.d; },
+    loaded: function () { return ns.buf; }
+  };
+
+  // Called by the app ~4x per second and on every change.
+  window.nativeState = function (s) {
+    if (!ready) {
+      ready = true;
+      $('loading').classList.add('hidden');
+      $('msg').classList.remove('show');
+      tick();
+      showUi(true);
+    }
+    // Ignore positions from before a seek we just made (they arrive slightly late).
+    if (Date.now() > ns.seekUntil || Math.abs(s.t - ns.seekT) < 1.5) ns.t = s.t;
+    ns.d = s.d; ns.buf = s.buf;
+    if (s.state !== 'buffering') $('loading').classList.add('hidden'); // clear "Reconnecting..." etc.
+    if (s.qualities) setQualityOptions(s.qualities, s.quality, s.label, s.engine);
+    setPlayState(s.state);
+  };
+  window.nativeStatus = function (text) {
+    $('msg').classList.remove('show');
+    spinner.classList.remove('hidden');
+    var l = $('loading');
+    l.textContent = text;
+    l.classList.remove('hidden');
+  };
+  window.nativeError = function (text) { showError(text); };
+
+  // =====================================================================
+  //  Engine 2: YouTube iframe (only used if streaming fails)
+  // =====================================================================
+  var yt = null;
+  var EmbedEngine = {
+    name: 'embed',
+    play: function () { yt.playVideo(); },
+    pause: function () { yt.pauseVideo(); },
+    seek: function (t) { yt.seekTo(t, true); },
+    setRate: function (r) { yt.setPlaybackRate(r); },
+    setQuality: function () {},
+    time: function () { return yt.getCurrentTime() || 0; },
+    duration: function () { return yt.getDuration() || 0; },
+    loaded: function () { return yt.getVideoLoadedFraction() || 0; }
+  };
+
+  // YouTube draws its logo / title / badges at the edges of the iframe: make the iframe larger
+  // than the screen on the letterbox side so those edges fall off-screen.
   var CROP = 0.22, MIN_CROP = 90;
   function layout() {
     var W = window.innerWidth, H = window.innerHeight;
     var bw = W, bh = H, x = 0, y = 0;
     if (W / H > 16 / 9) { var px = Math.max(MIN_CROP, W * CROP); bw = W + 2 * px; x = -px; }
     else { var py = Math.max(MIN_CROP, H * CROP); bh = H + 2 * py; y = -py; }
-    box.style.left = x + 'px';
-    box.style.top = y + 'px';
-    box.style.width = bw + 'px';
-    box.style.height = bh + 'px';
+    box.style.left = x + 'px'; box.style.top = y + 'px';
+    box.style.width = bw + 'px'; box.style.height = bh + 'px';
   }
-  layout();
-  window.addEventListener('resize', function () { layout(); });
 
-  // ---------- YouTube IFrame API ----------
-  var watchdog = setTimeout(function () {
-    if (!ready) showError('Video is taking too long to load. Check your internet and retry.');
-  }, 20000);
-
-  var tag = document.createElement('script');
-  tag.src = 'https://www.youtube.com/iframe_api';
-  tag.onerror = function () { showError('No internet connection.'); };
-  document.head.appendChild(tag);
-
-  window.onYouTubeIframeAPIReady = function () {
-    var vars = {
-      autoplay: 1, controls: 0, disablekb: 1, fs: 0, rel: 0, playsinline: 1,
-      iv_load_policy: 3, modestbranding: 1, cc_load_policy: 0, enablejsapi: 1,
-      start: Math.floor(START_AT), origin: location.origin
+  var watchdog = 0;
+  function startEmbed(startAt) {
+    MODE = 'embed';
+    E = EmbedEngine;
+    ready = false;
+    document.body.classList.remove('native');
+    document.documentElement.classList.remove('native');
+    layout();
+    window.addEventListener('resize', layout);
+    window.nativeStatus('Loading lecture...');
+    setQualityOptions([], '', '', 'embed');
+    watchdog = setTimeout(function () {
+      if (!ready) showError('Video is taking too long to load. Check your internet and retry.');
+    }, 20000);
+    window.onYouTubeIframeAPIReady = function () {
+      yt = new YT.Player('yt', {
+        videoId: VIDEO_ID, width: '100%', height: '100%',
+        playerVars: {
+          autoplay: 1, controls: 0, disablekb: 1, fs: 0, rel: 0, playsinline: 1,
+          iv_load_policy: 3, modestbranding: 1, cc_load_policy: 0, enablejsapi: 1,
+          start: Math.floor(startAt || START_AT), origin: location.origin
+        },
+        events: { onReady: onYtReady, onStateChange: onYtState, onError: onYtError,
+                  onPlaybackQualityChange: updateEmbedQuality, onApiChange: captionsOff }
+      });
     };
-    player = new YT.Player('yt', {
-      videoId: VIDEO_ID, width: '100%', height: '100%', playerVars: vars,
-      events: { onReady: onReady, onStateChange: onState, onError: onError,
-                onPlaybackQualityChange: updateQualityLabel, onApiChange: captionsOff }
-    });
-  };
+    var tag = document.createElement('script');
+    tag.src = 'https://www.youtube.com/iframe_api';
+    tag.onerror = function () { showError('No internet connection.'); };
+    document.head.appendChild(tag);
+  }
+  window.startEmbed = startEmbed;
 
-  function onReady() {
+  function onYtReady() {
     ready = true;
     clearTimeout(watchdog);
     $('loading').classList.add('hidden');
-    player.getIframe().setAttribute('tabindex', '-1');
+    yt.getIframe().setAttribute('tabindex', '-1');
     captionsOff();
-    player.playVideo();
+    yt.playVideo();
     tick();
     showUi(true);
-    // If the device blocked autoplay, reveal the thumbnail + play button instead of black.
     setTimeout(function () {
-      var st = player.getPlayerState ? player.getPlayerState() : -1;
+      var st = yt.getPlayerState ? yt.getPlayerState() : -1;
       if (st === -1 || st === 5) { cover.className = 'fill paused'; spinner.classList.add('hidden'); }
     }, 3000);
   }
-
-  function onState(e) {
+  function onYtState(e) {
     var S = YT.PlayerState;
-    playing = e.data === S.PLAYING;
-    ended = e.data === S.ENDED;
-    spinner.classList.toggle('hidden', e.data !== S.BUFFERING && e.data !== S.UNSTARTED);
-    if (playing) { cover.className = 'fill hidden'; $('msg').classList.remove('show'); }
-    else if (ended) { cover.className = 'fill'; save(true); }
-    else if (e.data === S.PAUSED || e.data === S.CUED) { cover.className = 'fill paused'; save(true); }
+    var map = {}; map[S.PLAYING] = 'playing'; map[S.PAUSED] = 'paused'; map[S.ENDED] = 'ended';
+    map[S.BUFFERING] = 'buffering'; map[S.CUED] = 'paused'; map[S.UNSTARTED] = 'buffering';
+    var st = map[e.data] || 'paused';
+    cover.className = st === 'playing' ? 'fill hidden' : st === 'ended' ? 'fill' : 'fill paused';
+    if (st === 'playing') { captionsOff(); updateEmbedQuality(); }
+    setPlayState(st);
+  }
+  function onYtError(e) {
+    var m = { 2: 'Invalid video.', 5: 'This video can\'t be played here.', 100: 'Video not found or removed.',
+              101: 'Embedding is disabled for this video.', 150: 'Embedding is disabled for this video.',
+              152: 'Player configuration error.', 153: 'Player configuration error.' };
+    showError(m[e.data] || 'Playback error (' + e.data + ').');
+  }
+  function captionsOff() {
+    if (!yt) return;
+    try { yt.unloadModule('captions'); } catch (e) {}
+    try { yt.unloadModule('cc'); } catch (e) {}
+    try { yt.setOption('captions', 'track', {}); } catch (e) {}
+  }
+  function updateEmbedQuality() {
+    var q = yt && yt.getPlaybackQuality ? Q_NAMES[yt.getPlaybackQuality()] : '';
+    $('qualVal').textContent = q || 'Auto';
+    $('qualNow').textContent = q ? 'Auto (' + q + ')' : 'Auto';
+  }
+
+  // =====================================================================
+  //  Shared player UI
+  // =====================================================================
+  function setPlayState(st) {
+    if (st === lastState) return;
+    lastState = st;
+    playing = st === 'playing';
+    ended = st === 'ended';
+    spinner.classList.toggle('hidden', st !== 'buffering');
+    if (playing) $('msg').classList.remove('show');
     $('playIcon').setAttribute('d', playing ? 'M6 19h4V5H6v14zm8-14v14h4V5h-4z'
       : ended ? 'M12 5V1L7 6l5 5V7c3.31 0 6 2.69 6 6s-2.69 6-6 6-6-2.69-6-6H4c0 4.42 3.58 8 8 8s8-3.58 8-8-3.58-8-8-8z'
       : 'M8 5v14l11-7z');
-    if (playing) { captionsOff(); scheduleHide(); updateQualityLabel(); } else showUi(true);
-  }
-
-  function onError(e) {
-    var m = {
-      2: 'Invalid video.', 5: 'This video can\'t be played here.',
-      100: 'Video not found or removed.', 101: 'Embedding is disabled for this video.',
-      150: 'Embedding is disabled for this video.', 152: 'Player configuration error.',
-      153: 'Player configuration error.'
-    };
-    showError(m[e.data] || 'Playback error (' + e.data + ').');
+    if (st === 'paused' || st === 'ended') save(true);
+    if (playing) scheduleHide(); else showUi(true);
   }
 
   function showError(t) {
@@ -298,23 +381,23 @@
     $('msg').classList.add('show');
   }
   $('retry').addEventListener('click', function () {
+    $('msg').classList.remove('show');
     try { Native.reload(); } catch (e) { location.reload(); }
   });
 
-  // ---------- Playback helpers ----------
-  function dur() { return ready ? (player.getDuration() || 0) : 0; }
-  function cur() { return ready ? (player.getCurrentTime() || 0) : 0; }
+  function dur() { return ready ? E.duration() : 0; }
+  function cur() { return ready ? E.time() : 0; }
 
   function togglePlay() {
     if (!ready) return;
-    if (ended) { player.seekTo(0, true); player.playVideo(); }
-    else if (playing) player.pauseVideo(); else player.playVideo();
+    if (ended) { E.seek(0); E.play(); }
+    else if (playing) E.pause(); else E.play();
   }
 
   function seekBy(sec) {
     if (!ready) return;
     var d = dur(), t = Math.max(0, Math.min(cur() + sec, d ? d - 0.5 : cur() + sec));
-    player.seekTo(t, true);
+    E.seek(t);
     render(t);
   }
 
@@ -336,14 +419,15 @@
     tickTimer = setInterval(function () {
       if (!ready) return;
       if (!dragging) render(cur());
-      buf.style.width = ((player.getVideoLoadedFraction() || 0) * 100) + '%';
+      buf.style.width = (E.loaded() * 100) + '%';
       save(false);
     }, 250);
   }
 
+  // Native mode saves progress in the app itself; this is for the iframe fallback.
   function save(force) {
     var now = Date.now();
-    if (!ready || (!force && now - lastSaved < 5000)) return;
+    if (!ready || MODE !== 'embed' || (!force && now - lastSaved < 5000)) return;
     lastSaved = now;
     try { Native.onProgress(cur(), dur()); } catch (e) {}
   }
@@ -360,24 +444,9 @@
   // ---------- Speed & quality ----------
   function setSpeed(s) {
     speed = s;
-    if (ready) player.setPlaybackRate(s);
+    if (ready) E.setRate(s);
     $('speedVal').textContent = $('speedNow').textContent = s + 'x';
     markSel('speedOpts', String(s));
-  }
-
-  // Captions always off (also catches auto-generated captions YouTube turns on by itself).
-  function captionsOff() {
-    if (!ready) return;
-    try { player.unloadModule('captions'); } catch (e) {}
-    try { player.unloadModule('cc'); } catch (e) {}
-    try { player.setOption('captions', 'track', {}); } catch (e) {}
-  }
-
-  // YouTube embeds pick quality automatically; we only display what is playing.
-  function updateQualityLabel() {
-    var q = ready && player.getPlaybackQuality ? Q_NAMES[player.getPlaybackQuality()] : '';
-    $('qualVal').textContent = q || 'Auto';
-    $('qualNow').textContent = q ? 'Auto (' + q + ')' : 'Auto';
   }
 
   function markSel(id, val) {
@@ -385,6 +454,7 @@
   }
 
   function buildOpts(id, items, onPick) {
+    $(id).innerHTML = '';
     items.forEach(function (it) {
       var b = document.createElement('button');
       b.className = 'opt';
@@ -401,10 +471,28 @@
   buildOpts('speedOpts', SPEEDS.map(function (s) { return { label: s === 1 ? 'Normal' : s + 'x', value: String(s) }; }),
     function (it) { setSpeed(Number(it.value)); toast('Speed ' + it.value + 'x'); });
   markSel('speedOpts', '1');
-  updateQualityLabel();
+
+  // qualities: [{id, label}], selected: id, label: what is actually playing (e.g. "720p")
+  var qualKey = '';
+  function setQualityOptions(qualities, selected, label, engine) {
+    var key = JSON.stringify(qualities) + selected;
+    if (key !== qualKey) {
+      qualKey = key;
+      buildOpts('qualOpts', qualities.map(function (q) { return { label: q.label, value: q.id }; }),
+        function (it) { E.setQuality(it.value); toast('Quality ' + it.label); });
+      markSel('qualOpts', selected);
+      $('qNote').textContent = engine === 'embed'
+        ? 'Compatibility mode: quality is chosen automatically by YouTube.'
+        : 'Auto adjusts to your internet speed.';
+    }
+    if (engine === 'embed') return;
+    var auto = selected === 'auto';
+    $('qualVal').textContent = label || 'Auto';
+    $('qualNow').textContent = auto ? (label ? 'Auto (' + label + ')' : 'Auto') : (label || '');
+  }
 
   var sheetBg = $('sheetBg');
-  function openSheet() { clearTimeout(hideTimer); updateQualityLabel(); sheetBg.classList.add('show'); }
+  function openSheet() { clearTimeout(hideTimer); sheetBg.classList.add('show'); }
   function closeSheet() { sheetBg.classList.remove('show'); scheduleHide(); }
   sheetBg.addEventListener('click', function (e) { if (e.target === sheetBg) closeSheet(); });
   $('sheet').addEventListener('click', function (e) { e.stopPropagation(); });
@@ -437,9 +525,9 @@
     $('fsIcon').setAttribute('d', fs
       ? 'M5 16h3v3h2v-5H5v2zm3-8H5v2h5V5H8v3zm6 11h2v-3h3v-2h-5v5zm2-11V5h-2v5h5V8h-3z'
       : 'M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z');
-    setTimeout(layout, 50);
+    if (MODE === 'embed') setTimeout(layout, 50);
   };
-  window.pauseVideo = function () { if (ready) player.pauseVideo(); };
+  window.pauseVideo = function () { if (ready && E) E.pause(); };
 
   // ---------- Seek bar (drag) ----------
   function barPos(e) {
@@ -462,7 +550,7 @@
     if (!dragging) return;
     dragging = false;
     bar.classList.remove('drag');
-    player.seekTo(parseFloat(prog.style.width) / 100 * dur(), true);
+    E.seek(parseFloat(prog.style.width) / 100 * dur());
     scheduleHide();
   }
   bar.addEventListener('touchstart', barStart, { passive: false });
@@ -525,6 +613,16 @@
     handleTap(e.changedTouches[0].clientX, window.innerWidth);
   }, { passive: false });
   shield.addEventListener('click', function (e) { handleTap(e.clientX, window.innerWidth); });
+
+  // ---------- Start ----------
+  if (MODE === 'embed') {
+    startEmbed(START_AT);
+  } else {
+    E = NativeEngine;
+    document.body.classList.add('native');
+    document.documentElement.classList.add('native');
+    window.nativeStatus('Loading lecture...');
+  }
 })();
 </script>
 </body>

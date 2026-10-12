@@ -9,6 +9,7 @@ import android.os.Build
 import android.os.Bundle
 import android.os.Message
 import android.view.View
+import android.view.ViewGroup
 import android.view.WindowInsets
 import android.view.WindowInsetsController
 import android.view.WindowManager
@@ -19,17 +20,26 @@ import android.webkit.WebResourceResponse
 import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
+import android.widget.FrameLayout
 import android.widget.Toast
+import androidx.annotation.OptIn
+import androidx.media3.common.util.UnstableApi
+import androidx.media3.ui.AspectRatioFrameLayout
+import androidx.media3.ui.PlayerView
+import org.json.JSONObject
 import java.io.ByteArrayInputStream
 
 /**
- * Locked-down YouTube player:
- *  - YouTube iframe gets zero touches (HTML shield on top + pointer-events:none),
- *    so logo / title / "Copy link" / long-press menus can never be reached.
- *  - Every navigation or popup out of the player page is blocked.
- *  - No text selection, no context menu, no long press, no WebView debugging.
- *  - Optional FLAG_SECURE (BLOCK_SCREENSHOTS) blocks screenshots and screen recording.
+ * Course lecture player.
+ *
+ * Layers (bottom → top):
+ *   1. PlayerView  – ExoPlayer playing the video's raw streams (no YouTube UI at all).
+ *   2. WebView     – transparent page with our controls + gestures (player.html).
+ *
+ * If streaming is impossible, the same page switches to the YouTube embed as a fallback.
+ * Navigation/popups out of the page are blocked; no long-press, no text selection.
  */
+@OptIn(UnstableApi::class)
 class PlayerActivity : Activity() {
 
     companion object {
@@ -39,17 +49,20 @@ class PlayerActivity : Activity() {
         // Set to true before publishing to block screenshots / screen recording.
         private const val BLOCK_SCREENSHOTS = false
 
-        // The player page is served from this https URL by the app itself (intercepted, never
-        // fetched from the network). A real https page URL makes WebView send a proper Referer,
-        // which YouTube now requires (otherwise: error 152/153 or a black player).
+        // The page is served by the app itself from this https URL (intercepted, never fetched).
+        // A real https origin is needed for the YouTube-embed fallback to work.
         private const val PAGE_URL = "https://iamd2epak.github.io/yt-player/player.html"
         private const val PREFS = "progress"
     }
 
     private lateinit var web: WebView
+    private lateinit var playerView: PlayerView
     private lateinit var videoId: String
+    private var stream: StreamPlayer? = null
     private var title = ""
+    private var mode = "native"
     private var fullscreen = false
+    private var pageReady = false
     @Volatile private var pageHtml = ""
 
     @SuppressLint("SetJavaScriptEnabled")
@@ -69,9 +82,16 @@ class PlayerActivity : Activity() {
         videoId = id
         title = intent.getStringExtra(EXTRA_TITLE).orEmpty()
 
+        playerView = PlayerView(this).apply {
+            useController = false
+            resizeMode = AspectRatioFrameLayout.RESIZE_MODE_FIT
+            setShutterBackgroundColor(Color.BLACK)
+            setBackgroundColor(Color.BLACK)
+        }
+
         WebView.setWebContentsDebuggingEnabled(false)
         web = WebView(this).apply {
-            setBackgroundColor(Color.BLACK)
+            setBackgroundColor(Color.TRANSPARENT)
             isLongClickable = false
             isHapticFeedbackEnabled = false
             setOnLongClickListener { true }
@@ -82,7 +102,7 @@ class PlayerActivity : Activity() {
         web.settings.apply {
             javaScriptEnabled = true
             domStorageEnabled = true
-            mediaPlaybackRequiresUserGesture = false // video starts instantly
+            mediaPlaybackRequiresUserGesture = false
             setSupportMultipleWindows(true)          // routed to onCreateWindow -> rejected
             javaScriptCanOpenWindowsAutomatically = false
             setSupportZoom(false)
@@ -95,9 +115,7 @@ class PlayerActivity : Activity() {
             cacheMode = WebSettings.LOAD_DEFAULT
             mixedContentMode = WebSettings.MIXED_CONTENT_NEVER_ALLOW
         }
-
         web.webViewClient = object : WebViewClient() {
-            // Serve our player page for PAGE_URL; everything else (YouTube) loads normally.
             override fun shouldInterceptRequest(view: WebView, request: WebResourceRequest): WebResourceResponse? {
                 if (request.url.toString() != PAGE_URL) return null
                 return WebResourceResponse("text/html", "UTF-8", ByteArrayInputStream(pageHtml.toByteArray(Charsets.UTF_8)))
@@ -107,31 +125,73 @@ class PlayerActivity : Activity() {
                     }
             }
 
-            // Block every top-level navigation (YouTube logo, title, end-screen, links...).
-            // Nothing can take the user out of the player page.
+            // Block every top-level navigation (logo, title, end-screen links...).
             override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean =
                 request.isForMainFrame
+
+            override fun onPageFinished(view: WebView, url: String) {
+                if (url != PAGE_URL || pageReady) return
+                pageReady = true
+                if (mode == "native") startStream()
+            }
         }
         web.webChromeClient = object : WebChromeClient() {
-            // Block target=_blank / window.open popups.
             override fun onCreateWindow(view: WebView, isDialog: Boolean, isUserGesture: Boolean, resultMsg: Message?) = false
         }
         web.addJavascriptInterface(Bridge(), "Android")
 
-        setContentView(web)
+        val root = FrameLayout(this).apply { setBackgroundColor(Color.BLACK) }
+        val match = ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
+        root.addView(playerView, match)
+        root.addView(web, match)
+        setContentView(root)
         applySystemUi()
 
-        loadPlayer()
+        loadPage("native")
     }
 
-    private fun loadPlayer() {
-        val startAt = getSharedPreferences(PREFS, MODE_PRIVATE).getFloat(videoId, 0f)
+    private fun savedPosition(): Double = getSharedPreferences(PREFS, MODE_PRIVATE).getFloat(videoId, 0f).toDouble()
+
+    private fun loadPage(newMode: String, startAt: Double = savedPosition()) {
+        mode = newMode
+        pageReady = false
         val html = assets.open("player.html").bufferedReader().use { it.readText() }
             .replace("{{VIDEO_ID}}", videoId)
             .replace("{{START_AT}}", startAt.toInt().toString())
             .replace("{{TITLE}}", strictEncode(title))
+            .replace("{{MODE}}", newMode)
         pageHtml = html
         web.loadUrl(PAGE_URL)
+    }
+
+    private fun startStream() {
+        stream?.release()
+        stream = StreamPlayer(this, playerView, videoId, object : StreamPlayer.Listener {
+            override fun onStatus(text: String) = js("window.nativeStatus&&nativeStatus(${JSONObject.quote(text)})")
+            override fun onState(json: String) = js("window.nativeState&&nativeState($json)")
+            override fun onError(message: String) = js("window.nativeError&&nativeError(${JSONObject.quote(message)})")
+            override fun onSaveProgress(positionSec: Double, durationSec: Double) = saveProgress(positionSec, durationSec)
+            override fun onFallbackToEmbed(positionSec: Double) = switchToEmbed(positionSec)
+        }).also { it.start(savedPosition()) }
+    }
+
+    /** Last resort: YouTube's own player inside the same page/controls. */
+    private fun switchToEmbed(positionSec: Double) {
+        stream?.release()
+        stream = null
+        playerView.visibility = View.GONE
+        web.setBackgroundColor(Color.BLACK)
+        loadPage("embed", positionSec)
+    }
+
+    private fun js(code: String) {
+        if (pageReady && !isFinishing) web.evaluateJavascript(code, null)
+    }
+
+    private fun saveProgress(current: Double, duration: Double) {
+        // Reset near the end so a finished lecture starts from the beginning next time.
+        val pos = if (duration > 0 && current > duration - 15) 0f else current.toFloat()
+        getSharedPreferences(PREFS, MODE_PRIVATE).edit().putFloat(videoId, pos).apply()
     }
 
     /** Percent-encode everything except [A-Za-z0-9] so the title is safe inside a JS string. */
@@ -144,16 +204,30 @@ class PlayerActivity : Activity() {
     }
 
     inner class Bridge {
+        /** Player commands from the page (native mode). */
         @JavascriptInterface
-        fun onProgress(current: Double, duration: Double) {
-            // Store resume point; reset near the end so the lecture restarts next time.
-            val pos = if (duration > 0 && current > duration - 15) 0f else current.toFloat()
-            getSharedPreferences(PREFS, MODE_PRIVATE).edit().putFloat(videoId, pos).apply()
+        fun cmd(name: String, arg: String) {
+            runOnUiThread {
+                val s = stream ?: return@runOnUiThread
+                when (name) {
+                    "play" -> s.play()
+                    "pause" -> s.pause()
+                    "seek" -> arg.toDoubleOrNull()?.let { s.seekTo(it) }
+                    "rate" -> arg.toFloatOrNull()?.let { s.setSpeed(it) }
+                    "quality" -> s.setQuality(arg)
+                }
+            }
         }
+
+        /** Progress from the YouTube-embed fallback. */
+        @JavascriptInterface
+        fun onProgress(current: Double, duration: Double) = saveProgress(current, duration)
 
         @JavascriptInterface
         fun reload() {
-            runOnUiThread { loadPlayer() }
+            runOnUiThread {
+                if (mode == "native" && stream != null) stream?.retry() else loadPage(mode)
+            }
         }
 
         @JavascriptInterface
@@ -166,13 +240,13 @@ class PlayerActivity : Activity() {
         fullscreen = on
         requestedOrientation = if (on) ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
         else ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
-        web.evaluateJavascript("window.setFullscreenIcon&&setFullscreenIcon($on)", null)
+        js("window.setFullscreenIcon&&setFullscreenIcon($on)")
     }
 
     override fun onConfigurationChanged(newConfig: Configuration) {
         super.onConfigurationChanged(newConfig)
         fullscreen = newConfig.orientation == Configuration.ORIENTATION_LANDSCAPE
-        if (::web.isInitialized) web.evaluateJavascript("window.setFullscreenIcon&&setFullscreenIcon($fullscreen)", null)
+        js("window.setFullscreenIcon&&setFullscreenIcon($fullscreen)")
         applySystemUi()
     }
 
@@ -207,7 +281,8 @@ class PlayerActivity : Activity() {
     override fun onPause() {
         super.onPause()
         if (::web.isInitialized) {
-            web.evaluateJavascript("window.pauseVideo&&pauseVideo()", null)
+            stream?.pause()
+            js("window.pauseVideo&&pauseVideo()")
             web.onPause()
         }
     }
@@ -218,6 +293,8 @@ class PlayerActivity : Activity() {
     }
 
     override fun onDestroy() {
+        stream?.release()
+        stream = null
         if (::web.isInitialized) {
             web.removeJavascriptInterface("Android")
             web.stopLoading()
