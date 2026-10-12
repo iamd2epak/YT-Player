@@ -3,7 +3,7 @@
 ## Files
 - **Upload this:** `MuteAdTube-1.0.0.aab` (signed with the upload key). Play needs an AAB, not an APK.
 - **App icon:** `store/icon-512.png` · **Feature graphic:** `store/feature-graphic-1024x500.png`
-- **Screenshots:** take 4–8 phone screenshots yourself (Home, Player, Player fullscreen, Settings). Use only your own or royalty-free videos in them.
+- **Screenshots:** `store/screenshots/` (4 × 1080×1920, ready to upload in order).
 
 ## Signing (Play App Signing)
 1. Create app → Release → Production → Create release.
