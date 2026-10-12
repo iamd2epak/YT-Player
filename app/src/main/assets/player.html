@@ -9,59 +9,81 @@
       -webkit-user-select: none; user-select: none;
       -webkit-touch-callout: none; -webkit-tap-highlight-color: transparent; }
   html, body { width: 100%; height: 100%; background: #000; overflow: hidden;
-               font-family: Roboto, sans-serif; color: #fff; }
+               font-family: Roboto, "Segoe UI", sans-serif; color: #fff; }
+  .fill { position: absolute; top: 0; right: 0; bottom: 0; left: 0; }
 
-  /* YouTube iframe never receives any touch: no logo click, no title/copy-link, no long press. */
-  #yt-wrap { position: absolute; top: 0; right: 0; bottom: 0; left: 0; pointer-events: none; }
-  #yt-wrap iframe { width: 100%; height: 100%; border: 0; pointer-events: none; }
+  /* The YouTube iframe is made bigger than the screen and cropped, so YouTube's logo,
+     title bar and corner badges sit outside the visible area. It never gets any touch. */
+  #stage { overflow: hidden; pointer-events: none; }
+  #yt-box { position: absolute; transform-origin: 0 0; pointer-events: none; }
+  #yt-box iframe { width: 100%; height: 100%; border: 0; pointer-events: none; display: block; }
 
-  /* Full-size shield above the iframe. Every touch lands here. */
-  #shield { position: absolute; top: 0; right: 0; bottom: 0; left: 0; z-index: 10; touch-action: none; }
-
-  /* Hides YouTube's own pause/end overlays (title, "More videos", end screen) */
-  #cover { position: absolute; top: 0; right: 0; bottom: 0; left: 0; z-index: 5; background: #000;
-           opacity: 1; transition: opacity .25s; pointer-events: none; }
-  #cover.paused { opacity: .55; }
+  #cover { z-index: 5; background: #000; opacity: 1; transition: opacity .25s; pointer-events: none; }
+  #cover.paused { opacity: .6; }
   #cover.hidden { opacity: 0; }
+  #shield { z-index: 10; touch-action: none; }
 
-  #ui { position: absolute; top: 0; right: 0; bottom: 0; left: 0; z-index: 20; pointer-events: none;
-        transition: opacity .2s; }
+  /* ---------- Controls ---------- */
+  #ui { z-index: 20; pointer-events: none; transition: opacity .2s; }
   #ui.off { opacity: 0; }
   #ui.off * { pointer-events: none !important; }
-  .grad-top, .grad-bot { position: absolute; left: 0; right: 0; height: 90px; }
-  .grad-top { top: 0; background: linear-gradient(rgba(0,0,0,.7), transparent); }
-  .grad-bot { bottom: 0; background: linear-gradient(transparent, rgba(0,0,0,.8)); }
+  .grad-top, .grad-bot { position: absolute; left: 0; right: 0; }
+  .grad-top { top: 0; height: 80px; background: linear-gradient(rgba(0,0,0,.75), transparent); }
+  .grad-bot { bottom: 0; height: 130px; background: linear-gradient(transparent, rgba(0,0,0,.85)); }
 
-  #title { position: absolute; top: 12px; left: 16px; right: 120px; font-size: 15px;
-           white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  #speed { position: absolute; top: 6px; right: 12px; pointer-events: auto; }
+  #title { position: absolute; top: 14px; left: 18px; right: 18px; font-size: 16px; font-weight: 500;
+           white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-shadow: 0 1px 3px #000; }
 
   #center { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
-            display: flex; align-items: center; gap: 40px; }
+            display: flex; align-items: center; gap: 44px; }
+  button { font-family: inherit; }
   .btn { pointer-events: auto; background: rgba(0,0,0,.45); border: 0; color: #fff;
          border-radius: 50%; display: flex; align-items: center; justify-content: center; }
   .btn svg { fill: #fff; }
-  .btn.sm { width: 52px; height: 52px; }
-  .btn.sm svg { width: 30px; height: 30px; }
-  .btn.lg { width: 68px; height: 68px; }
-  .btn.lg svg { width: 40px; height: 40px; }
-  .btn.flat { background: transparent; width: 40px; height: 40px; border-radius: 6px; }
-  .btn.flat svg { width: 26px; height: 26px; }
-  .btn.txt { width: auto; height: 34px; padding: 0 12px; border-radius: 17px;
-             font-size: 14px; font-weight: 600; }
+  .btn:active { background: rgba(255,255,255,.2); }
+  .btn.sm { width: 54px; height: 54px; }
+  .btn.sm svg { width: 32px; height: 32px; }
+  .btn.lg { width: 72px; height: 72px; }
+  .btn.lg svg { width: 42px; height: 42px; }
 
-  #bottom { position: absolute; left: 0; right: 0; bottom: 0; padding: 0 12px 6px;
-            display: flex; align-items: center; gap: 10px; }
-  #time { font-size: 13px; min-width: 92px; font-variant-numeric: tabular-nums; }
-  #bar { flex: 1; position: relative; height: 32px; pointer-events: auto; touch-action: none; }
-  #bar .track, #bar .buf, #bar .prog { position: absolute; left: 0; top: 14px; height: 4px;
-                                       border-radius: 2px; }
+  #bottom { position: absolute; left: 0; right: 0; bottom: 0; padding: 0 14px 8px; }
+  #barRow { display: flex; align-items: center; }
+  #bar { flex: 1; position: relative; height: 30px; pointer-events: auto; touch-action: none; }
+  #bar .track, #bar .buf, #bar .prog { position: absolute; left: 0; top: 13px; height: 4px; border-radius: 2px; }
   #bar .track { right: 0; background: rgba(255,255,255,.25); }
   #bar .buf { background: rgba(255,255,255,.45); width: 0; }
   #bar .prog { background: #e53935; width: 0; }
-  #bar .knob { position: absolute; top: 9px; width: 14px; height: 14px; margin-left: -7px;
-               border-radius: 50%; background: #e53935; left: 0; }
+  #bar .knob { position: absolute; top: 8px; width: 14px; height: 14px; margin-left: -7px;
+               border-radius: 50%; background: #e53935; left: 0; transition: transform .1s; }
+  #bar.drag .knob { transform: scale(1.4); }
 
+  #ctrlRow { display: flex; align-items: center; gap: 8px; height: 40px; }
+  #time { font-size: 13px; font-variant-numeric: tabular-nums; flex: 1; text-shadow: 0 1px 2px #000; }
+  .chip { pointer-events: auto; height: 34px; padding: 0 12px; border-radius: 17px; border: 0;
+          background: rgba(255,255,255,.16); color: #fff; font-size: 13px; font-weight: 600;
+          display: flex; align-items: center; gap: 6px; }
+  .chip svg { width: 18px; height: 18px; fill: #fff; }
+  .chip:active { background: rgba(255,255,255,.3); }
+  .chip.icon { width: 40px; padding: 0; justify-content: center; background: transparent; }
+  .chip.icon svg { width: 26px; height: 26px; }
+
+  /* ---------- Settings sheet ---------- */
+  #sheetBg { z-index: 40; background: rgba(0,0,0,.55); display: none; }
+  #sheetBg.show { display: block; }
+  #sheet { position: absolute; left: 50%; bottom: 0; transform: translateX(-50%);
+           width: 100%; max-width: 520px; max-height: 92%; overflow-y: auto; background: #1c1c1e;
+           border-radius: 16px 16px 0 0; padding: 14px 18px 18px; }
+  #sheet h4 { font-size: 13px; font-weight: 600; color: #aaa; text-transform: uppercase;
+              letter-spacing: .6px; margin: 8px 0 10px; display: flex; justify-content: space-between; }
+  #sheet h4 span { color: #fff; text-transform: none; letter-spacing: 0; }
+  .opts { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 8px; }
+  .opt { min-width: 64px; height: 38px; padding: 0 14px; border-radius: 19px; border: 1px solid #3a3a3c;
+         background: #2c2c2e; color: #fff; font-size: 14px; font-weight: 500; }
+  .opt.sel { background: #e53935; border-color: #e53935; font-weight: 700; }
+  .handle { width: 40px; height: 4px; border-radius: 2px; background: #555; margin: 0 auto 6px; }
+  #qNote { font-size: 11px; color: #888; margin-top: 2px; }
+
+  /* ---------- Gestures feedback ---------- */
   .ripple { position: absolute; top: 0; bottom: 0; width: 38%; z-index: 15;
             display: flex; align-items: center; justify-content: center; flex-direction: column;
             background: rgba(255,255,255,.12); opacity: 0; transition: opacity .25s;
@@ -70,6 +92,11 @@
   .ripple.show { opacity: 1; }
   #rip-l { left: 0; border-radius: 0 50% 50% 0 / 0 50% 50% 0; }
   #rip-r { right: 0; border-radius: 50% 0 0 50% / 50% 0 0 50%; }
+
+  #toast { position: absolute; top: 22%; left: 50%; transform: translateX(-50%); z-index: 45;
+           background: rgba(0,0,0,.75); padding: 8px 16px; border-radius: 18px; font-size: 14px;
+           opacity: 0; transition: opacity .2s; pointer-events: none; }
+  #toast.show { opacity: 1; }
 
   #spinner { position: absolute; top: 50%; left: 50%; width: 46px; height: 46px; z-index: 25;
              margin: -23px 0 0 -23px; border: 4px solid rgba(255,255,255,.25);
@@ -80,37 +107,28 @@
              text-align: center; font-size: 14px; color: #bbb; pointer-events: none; }
   @keyframes spin { to { transform: rotate(360deg); } }
 
-  #msg { position: absolute; top: 0; right: 0; bottom: 0; left: 0; z-index: 30; display: none; background: #000;
-         flex-direction: column; align-items: center; justify-content: center; gap: 16px;
-         text-align: center; padding: 24px; font-size: 15px; }
+  #msg { z-index: 50; display: none; background: #000; flex-direction: column; align-items: center;
+         justify-content: center; gap: 16px; text-align: center; padding: 24px; font-size: 15px; }
   #msg.show { display: flex; }
-
-  #menu { position: absolute; top: 44px; right: 12px; z-index: 40; background: #212121;
-          border-radius: 8px; padding: 6px 0; display: none; pointer-events: auto; }
-  #menu.show { display: block; }
-  #menu div { padding: 9px 26px; font-size: 14px; }
-  #menu div.sel { color: #e53935; font-weight: 700; }
+  #retry { background: #e53935; }
 </style>
 </head>
 <body oncontextmenu="return false">
-  <div id="yt-wrap"><div id="yt"></div></div>
-  <div id="cover"></div>
-  <div id="shield"></div>
+  <div id="stage" class="fill"><div id="yt-box"><div id="yt"></div></div></div>
+  <div id="cover" class="fill"></div>
+  <div id="shield" class="fill"></div>
 
   <div id="rip-l" class="ripple">
-    <svg viewBox="0 0 24 24"><path d="M11 18V6l-8.5 6 8.5 6zm.5-6l8.5 6V6l-8.5 6z"/></svg>
-    <span></span>
+    <svg viewBox="0 0 24 24"><path d="M11 18V6l-8.5 6 8.5 6zm.5-6l8.5 6V6l-8.5 6z"/></svg><span></span>
   </div>
   <div id="rip-r" class="ripple">
-    <svg viewBox="0 0 24 24"><path d="M4 18l8.5-6L4 6v12zm9-12v12l8.5-6L13 6z"/></svg>
-    <span></span>
+    <svg viewBox="0 0 24 24"><path d="M4 18l8.5-6L4 6v12zm9-12v12l8.5-6L13 6z"/></svg><span></span>
   </div>
 
-  <div id="ui">
+  <div id="ui" class="fill">
     <div class="grad-top"></div>
     <div class="grad-bot"></div>
     <div id="title"></div>
-    <div id="speed"><button class="btn txt" id="speedBtn">1x</button></div>
 
     <div id="center">
       <button class="btn sm" id="back10" aria-label="Back 10s">
@@ -125,18 +143,41 @@
     </div>
 
     <div id="bottom">
-      <span id="time">0:00 / 0:00</span>
-      <div id="bar"><div class="track"></div><div class="buf"></div><div class="prog"></div><div class="knob"></div></div>
-      <button class="btn flat" id="fs" aria-label="Fullscreen">
-        <svg viewBox="0 0 24 24"><path id="fsIcon" d="M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z"/></svg>
-      </button>
+      <div id="barRow">
+        <div id="bar"><div class="track"></div><div class="buf"></div><div class="prog"></div><div class="knob"></div></div>
+      </div>
+      <div id="ctrlRow">
+        <span id="time">0:00 / 0:00</span>
+        <button class="chip" id="speedChip" aria-label="Playback speed">
+          <svg viewBox="0 0 24 24"><path d="M20.38 8.57l-1.23 1.85a8 8 0 0 1-.22 7.58H5.07A8 8 0 0 1 15.58 6.85l1.85-1.23A10 10 0 0 0 3.35 19a2 2 0 0 0 1.72 1h13.85a2 2 0 0 0 1.74-1 10 10 0 0 0-.27-10.44zm-9.79 6.84a2 2 0 0 0 2.83 0l5.66-8.49-8.49 5.66a2 2 0 0 0 0 2.83z"/></svg>
+          <span id="speedVal">1x</span>
+        </button>
+        <button class="chip" id="qualChip" aria-label="Quality">
+          <svg viewBox="0 0 24 24"><path d="M19.14 12.94a7.07 7.07 0 0 0 0-1.88l2.03-1.58a.5.5 0 0 0 .12-.64l-1.92-3.32a.5.5 0 0 0-.61-.22l-2.39.96a7 7 0 0 0-1.62-.94l-.36-2.54A.5.5 0 0 0 13.9 2h-3.84a.5.5 0 0 0-.49.42l-.36 2.54a7.3 7.3 0 0 0-1.62.94l-2.39-.96a.5.5 0 0 0-.61.22L2.67 8.48a.5.5 0 0 0 .12.64l2.03 1.58a7.07 7.07 0 0 0 0 1.88l-2.03 1.58a.5.5 0 0 0-.12.64l1.92 3.32c.12.22.39.3.61.22l2.39-.96c.5.38 1.04.7 1.62.94l.36 2.54c.05.24.25.42.49.42h3.84c.24 0 .44-.18.49-.42l.36-2.54a7.3 7.3 0 0 0 1.62-.94l2.39.96c.22.08.49 0 .61-.22l1.92-3.32a.5.5 0 0 0-.12-.64l-2.03-1.58zM12 15.6a3.6 3.6 0 1 1 0-7.2 3.6 3.6 0 0 1 0 7.2z"/></svg>
+          <span id="qualVal">Auto</span>
+        </button>
+        <button class="chip icon" id="fs" aria-label="Fullscreen">
+          <svg viewBox="0 0 24 24"><path id="fsIcon" d="M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z"/></svg>
+        </button>
+      </div>
     </div>
   </div>
 
-  <div id="menu"></div>
+  <div id="sheetBg" class="fill">
+    <div id="sheet">
+      <div class="handle"></div>
+      <h4>Playback speed <span id="speedNow">1x</span></h4>
+      <div class="opts" id="speedOpts"></div>
+      <h4>Quality <span id="qualNow">Auto</span></h4>
+      <div class="opts" id="qualOpts"></div>
+      <div id="qNote">Higher quality uses more data. Auto adjusts to your connection.</div>
+    </div>
+  </div>
+
+  <div id="toast"></div>
   <div id="spinner"></div>
   <div id="loading">Loading lecture...</div>
-  <div id="msg"><div id="msgText"></div><button class="btn txt" id="retry" style="background:#e53935">Retry</button></div>
+  <div id="msg" class="fill"><div id="msgText"></div><button class="chip" id="retry">Retry</button></div>
 
 <script>
 (function () {
@@ -146,19 +187,29 @@
   var TITLE = decodeURIComponent('{{TITLE}}');
   var SEEK_STEP = 10;
   var SPEEDS = [0.5, 0.75, 1, 1.25, 1.5, 1.75, 2];
+  // label, target video height in device pixels (0 = auto), legacy API name
+  var QUALITIES = [['Auto', 0, 'default'], ['1080p', 1080, 'hd1080'], ['720p', 720, 'hd720'],
+                   ['480p', 480, 'large'], ['360p', 360, 'medium'], ['240p', 240, 'small'],
+                   ['144p', 144, 'tiny']];
+  var Q_NAMES = { hd2160: '2160p', hd1440: '1440p', hd1080: '1080p', hd720: '720p', large: '480p',
+                  medium: '360p', small: '240p', tiny: '144p' };
 
   var Native = window.Android || {
-    onProgress: function () {}, reload: function () { location.reload(); }, toggleFullscreen: function () {}, isFullscreen: function () { return false; }
+    onProgress: function () {}, reload: function () { location.reload(); },
+    toggleFullscreen: function () {}, saveQuality: function () {}, getQuality: function () { return 0; }
   };
 
   var $ = function (id) { return document.getElementById(id); };
-  var ui = $('ui'), cover = $('cover'), spinner = $('spinner');
+  var ui = $('ui'), cover = $('cover'), spinner = $('spinner'), box = $('yt-box');
   var bar = $('bar'), prog = bar.querySelector('.prog'), buf = bar.querySelector('.buf'),
       knob = bar.querySelector('.knob');
   $('title').textContent = TITLE;
 
   var player = null, ready = false, playing = false, ended = false, dragging = false;
   var hideTimer = 0, tickTimer = 0, lastSaved = 0;
+  var speed = 1, quality = 0;
+  try { quality = Number(Native.getQuality()) || 0; } catch (e) {}
+  if (!(quality >= 0 && quality < QUALITIES.length)) quality = 0;
 
   // ---------- Hard-block anything that could leak the video link ----------
   ['contextmenu', 'selectstart', 'dragstart', 'copy', 'cut'].forEach(function (ev) {
@@ -166,26 +217,55 @@
   });
   window.open = function () { return null; };
 
+  // ---------- Layout: oversize + crop the iframe ----------
+  // YouTube draws its logo / title / badges at the edges of the *iframe*. We make the iframe
+  // larger than the screen only along the side where the video has black bars, so the video
+  // itself stays the same size while those edges (and YouTube's branding) fall off-screen.
+  // For a fixed quality we also render the iframe at the pixel size YouTube needs for that
+  // resolution and scale it with CSS (YouTube picks the stream by player size).
+  var CROP = 0.22, MIN_CROP = 90;
+  function layout() {
+    var W = window.innerWidth, H = window.innerHeight;
+    var bw = W, bh = H, x = 0, y = 0;
+    if (W / H > 16 / 9) { var px = Math.max(MIN_CROP, W * CROP); bw = W + 2 * px; x = -px; }
+    else { var py = Math.max(MIN_CROP, H * CROP); bh = H + 2 * py; y = -py; }
+
+    var k = 1;
+    var target = QUALITIES[quality][1];
+    if (target) {
+      var videoH = Math.min(H, W * 9 / 16) * (window.devicePixelRatio || 1);
+      k = Math.max(0.15, Math.min(4, target / videoH));
+    }
+    box.style.left = x + 'px';
+    box.style.top = y + 'px';
+    box.style.width = (bw * k) + 'px';
+    box.style.height = (bh * k) + 'px';
+    box.style.transform = k === 1 ? 'none' : 'scale(' + (1 / k) + ')';
+  }
+  layout();
+  window.addEventListener('resize', function () { layout(); });
+
   // ---------- YouTube IFrame API ----------
+  var watchdog = setTimeout(function () {
+    if (!ready) showError('Video is taking too long to load. Check your internet and retry.');
+  }, 20000);
+
   var tag = document.createElement('script');
   tag.src = 'https://www.youtube.com/iframe_api';
   tag.onerror = function () { showError('No internet connection.'); };
   document.head.appendChild(tag);
 
-  // Watchdog: never leave a silent black screen.
-  var watchdog = setTimeout(function () {
-    if (!ready) showError('Video is taking too long to load. Check your internet and retry.');
-  }, 20000);
-
   window.onYouTubeIframeAPIReady = function () {
+    var vars = {
+      autoplay: 1, controls: 0, disablekb: 1, fs: 0, rel: 0, playsinline: 1,
+      iv_load_policy: 3, modestbranding: 1, cc_load_policy: 0, enablejsapi: 1,
+      start: Math.floor(START_AT), origin: location.origin
+    };
+    if (quality) vars.vq = QUALITIES[quality][2];
     player = new YT.Player('yt', {
-      videoId: VIDEO_ID,
-      playerVars: {
-        autoplay: 1, controls: 0, disablekb: 1, fs: 0, rel: 0, playsinline: 1,
-        iv_load_policy: 3, modestbranding: 1, cc_load_policy: 0, enablejsapi: 1,
-        start: Math.floor(START_AT), origin: location.origin
-      },
-      events: { onReady: onReady, onStateChange: onState, onError: onError }
+      videoId: VIDEO_ID, width: '100%', height: '100%', playerVars: vars,
+      events: { onReady: onReady, onStateChange: onState, onError: onError,
+                onPlaybackQualityChange: updateQualityLabel }
     });
   };
 
@@ -193,15 +273,15 @@
     ready = true;
     clearTimeout(watchdog);
     $('loading').classList.add('hidden');
-    var f = player.getIframe();
-    f.setAttribute('tabindex', '-1');
+    player.getIframe().setAttribute('tabindex', '-1');
+    applyQuality(false);
     player.playVideo();
     tick();
     showUi(true);
     // If the device blocked autoplay, reveal the thumbnail + play button instead of black.
     setTimeout(function () {
       var st = player.getPlayerState ? player.getPlayerState() : -1;
-      if (st === -1 || st === 5) { cover.className = 'paused'; spinner.classList.add('hidden'); }
+      if (st === -1 || st === 5) { cover.className = 'fill paused'; spinner.classList.add('hidden'); }
     }, 3000);
   }
 
@@ -210,14 +290,13 @@
     playing = e.data === S.PLAYING;
     ended = e.data === S.ENDED;
     spinner.classList.toggle('hidden', e.data !== S.BUFFERING && e.data !== S.UNSTARTED);
-    if (playing) { cover.className = 'hidden'; $('msg').classList.remove('show'); }
-    else if (ended) { cover.className = ''; save(true); }
-    else if (e.data === S.PAUSED) { cover.className = 'paused'; save(true); }
-    else if (e.data === S.CUED) { cover.className = 'paused'; }
+    if (playing) { cover.className = 'fill hidden'; $('msg').classList.remove('show'); }
+    else if (ended) { cover.className = 'fill'; save(true); }
+    else if (e.data === S.PAUSED || e.data === S.CUED) { cover.className = 'fill paused'; save(true); }
     $('playIcon').setAttribute('d', playing ? 'M6 19h4V5H6v14zm8-14v14h4V5h-4z'
       : ended ? 'M12 5V1L7 6l5 5V7c3.31 0 6 2.69 6 6s-2.69 6-6 6-6-2.69-6-6H4c0 4.42 3.58 8 8 8s8-3.58 8-8-3.58-8-8-8z'
       : 'M8 5v14l11-7z');
-    if (playing) scheduleHide(); else showUi(true);
+    if (playing) { scheduleHide(); updateQualityLabel(); } else showUi(true);
   }
 
   function onError(e) {
@@ -240,7 +319,7 @@
     try { Native.reload(); } catch (e) { location.reload(); }
   });
 
-  // ---------- Controls ----------
+  // ---------- Playback helpers ----------
   function dur() { return ready ? (player.getDuration() || 0) : 0; }
   function cur() { return ready ? (player.getCurrentTime() || 0) : 0; }
 
@@ -287,14 +366,91 @@
     try { Native.onProgress(cur(), dur()); } catch (e) {}
   }
 
+  var toastTimer = 0;
+  function toast(t) {
+    var el = $('toast');
+    el.textContent = t;
+    el.classList.add('show');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(function () { el.classList.remove('show'); }, 1200);
+  }
+
+  // ---------- Speed & quality ----------
+  function setSpeed(s) {
+    speed = s;
+    if (ready) player.setPlaybackRate(s);
+    $('speedVal').textContent = $('speedNow').textContent = s + 'x';
+    markSel('speedOpts', String(s));
+  }
+
+  function applyQuality(seekToFlush) {
+    layout();
+    if (!ready) return;
+    var name = QUALITIES[quality][2];
+    try { player.setPlaybackQuality(name); } catch (e) {}
+    // Re-seek to the current time so the player drops the old buffer and switches quickly.
+    if (seekToFlush) player.seekTo(cur(), true);
+  }
+
+  function setQuality(i) {
+    quality = i;
+    try { Native.saveQuality(i); } catch (e) {}
+    markSel('qualOpts', String(i));
+    applyQuality(true);
+    updateQualityLabel();
+  }
+
+  function updateQualityLabel() {
+    var label = QUALITIES[quality][0];
+    if (!quality && ready) {
+      var q = player.getPlaybackQuality && Q_NAMES[player.getPlaybackQuality()];
+      $('qualNow').textContent = q ? 'Auto (' + q + ')' : 'Auto';
+    } else {
+      $('qualNow').textContent = label;
+    }
+    $('qualVal').textContent = label === 'Auto' ? 'Auto' : label;
+  }
+
+  function markSel(id, val) {
+    [].forEach.call($(id).children, function (c) { c.classList.toggle('sel', c.getAttribute('data-v') === val); });
+  }
+
+  function buildOpts(id, items, onPick) {
+    items.forEach(function (it) {
+      var b = document.createElement('button');
+      b.className = 'opt';
+      b.textContent = it.label;
+      b.setAttribute('data-v', it.value);
+      b.addEventListener('click', function (e) {
+        e.stopPropagation();
+        onPick(it);
+        closeSheet();
+      });
+      $(id).appendChild(b);
+    });
+  }
+  buildOpts('speedOpts', SPEEDS.map(function (s) { return { label: s === 1 ? 'Normal' : s + 'x', value: String(s) }; }),
+    function (it) { setSpeed(Number(it.value)); toast('Speed ' + it.value + 'x'); });
+  buildOpts('qualOpts', QUALITIES.map(function (q, i) { return { label: q[0], value: String(i) }; }),
+    function (it) { setQuality(Number(it.value)); toast('Quality ' + QUALITIES[quality][0]); });
+  markSel('speedOpts', '1');
+  markSel('qualOpts', String(quality));
+  updateQualityLabel();
+
+  var sheetBg = $('sheetBg');
+  function openSheet() { clearTimeout(hideTimer); updateQualityLabel(); sheetBg.classList.add('show'); }
+  function closeSheet() { sheetBg.classList.remove('show'); scheduleHide(); }
+  sheetBg.addEventListener('click', function (e) { if (e.target === sheetBg) closeSheet(); });
+  $('sheet').addEventListener('click', function (e) { e.stopPropagation(); });
+
+  // ---------- Controls visibility ----------
   function showUi(stay) {
     ui.classList.remove('off');
     if (!stay) scheduleHide();
   }
   function hideUi() {
-    if (!playing || dragging) return;
+    if (!playing || dragging || sheetBg.classList.contains('show')) return;
     ui.classList.add('off');
-    $('menu').classList.remove('show');
   }
   function scheduleHide() {
     clearTimeout(hideTimer);
@@ -308,32 +464,16 @@
   on('back10', function () { seekBy(-SEEK_STEP); flash('l', SEEK_STEP); });
   on('fwd10', function () { seekBy(SEEK_STEP); flash('r', SEEK_STEP); });
   on('fs', function () { try { Native.toggleFullscreen(); } catch (e) {} });
+  on('speedChip', openSheet);
+  on('qualChip', openSheet);
 
   window.setFullscreenIcon = function (fs) {
     $('fsIcon').setAttribute('d', fs
       ? 'M5 16h3v3h2v-5H5v2zm3-8H5v2h5V5H8v3zm6 11h2v-3h3v-2h-5v5zm2-11V5h-2v5h5V8h-3z'
       : 'M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z');
+    setTimeout(layout, 50);
   };
   window.pauseVideo = function () { if (ready) player.pauseVideo(); };
-
-  // Speed menu
-  var menu = $('menu');
-  SPEEDS.forEach(function (s) {
-    var d = document.createElement('div');
-    d.textContent = s + 'x';
-    d.dataset.s = s;
-    d.addEventListener('click', function (e) {
-      e.stopPropagation();
-      if (ready) player.setPlaybackRate(s);
-      $('speedBtn').textContent = s + 'x';
-      [].forEach.call(menu.children, function (c) { c.classList.toggle('sel', +c.dataset.s === s); });
-      menu.classList.remove('show');
-      scheduleHide();
-    });
-    if (s === 1) d.className = 'sel';
-    menu.appendChild(d);
-  });
-  on('speedBtn', function () { menu.classList.toggle('show'); });
 
   // ---------- Seek bar (drag) ----------
   function barPos(e) {
@@ -348,14 +488,15 @@
     if (!ready) return;
     e.stopPropagation();
     dragging = true;
+    bar.classList.add('drag');
     clearTimeout(hideTimer);
     barMove(e);
   }
-  function barEnd(e) {
+  function barEnd() {
     if (!dragging) return;
     dragging = false;
-    var t = parseFloat(prog.style.width) / 100 * dur();
-    player.seekTo(t, true);
+    bar.classList.remove('drag');
+    player.seekTo(parseFloat(prog.style.width) / 100 * dur(), true);
     scheduleHide();
   }
   bar.addEventListener('touchstart', barStart, { passive: false });
@@ -377,18 +518,22 @@
     el._t = setTimeout(function () { el.classList.remove('show'); }, 600);
   }
 
+  function comboStep(side, now) {
+    lastTap = now;
+    seekBy(side === 'l' ? -SEEK_STEP : SEEK_STEP);
+    flash(side, seekCombo);
+    clearTimeout(comboTimer);
+    comboTimer = setTimeout(function () { seekCombo = 0; }, 700);
+  }
+
   function handleTap(x, w) {
     var now = Date.now();
     var side = x < w * 0.35 ? 'l' : x > w * 0.65 ? 'r' : 'c';
 
     // Already in a seek combo: every extra tap on the same side adds another step.
     if (seekCombo && side === comboSide && now - lastTap < 700) {
-      lastTap = now;
       seekCombo += SEEK_STEP;
-      seekBy(side === 'l' ? -SEEK_STEP : SEEK_STEP);
-      flash(side, seekCombo);
-      clearTimeout(comboTimer);
-      comboTimer = setTimeout(function () { seekCombo = 0; }, 700);
+      comboStep(side, now);
       return;
     }
 
@@ -396,18 +541,14 @@
       clearTimeout(tapTimer);
       lastTap = 0;
       if (side === 'c') { togglePlay(); return; }
-      seekCombo = SEEK_STEP; comboSide = side; lastTap = now;
-      seekBy(side === 'l' ? -SEEK_STEP : SEEK_STEP);
-      flash(side, seekCombo);
-      clearTimeout(comboTimer);
-      comboTimer = setTimeout(function () { seekCombo = 0; }, 700);
+      seekCombo = SEEK_STEP; comboSide = side;
+      comboStep(side, now);
       return;
     }
 
     lastTap = now;
     clearTimeout(tapTimer);
     tapTimer = setTimeout(function () {    // single tap: toggle controls
-      menu.classList.remove('show');
       if (ui.classList.contains('off')) showUi(!playing); else hideUi();
     }, 300);
   }
@@ -415,12 +556,9 @@
   var shield = $('shield');
   shield.addEventListener('touchend', function (e) {
     e.preventDefault();
-    var t = e.changedTouches[0];
-    handleTap(t.clientX, window.innerWidth);
+    handleTap(e.changedTouches[0].clientX, window.innerWidth);
   }, { passive: false });
   shield.addEventListener('click', function (e) { handleTap(e.clientX, window.innerWidth); });
-  // UI layer itself is transparent to taps except on its buttons, so taps go to the shield.
-  ui.addEventListener('touchend', function () {}, { passive: true });
 })();
 </script>
 </body>
