@@ -41,7 +41,6 @@ class PlayerActivity : Activity() {
         // which YouTube now requires (otherwise: error 152/153 or a black player).
         private const val PAGE_URL = "https://iamd2epak.github.io/yt-player/player.html"
         private const val PREFS = "progress"
-        private const val KEY_QUALITY = "__quality"
     }
 
     private lateinit var web: WebView
@@ -145,14 +144,6 @@ class PlayerActivity : Activity() {
             // Store resume point; reset near the end so the lecture restarts next time.
             val pos = if (duration > 0 && current > duration - 15) 0f else current.toFloat()
             getSharedPreferences(PREFS, MODE_PRIVATE).edit().putFloat(videoId, pos).apply()
-        }
-
-        @JavascriptInterface
-        fun getQuality(): Int = getSharedPreferences(PREFS, MODE_PRIVATE).getInt(KEY_QUALITY, 0)
-
-        @JavascriptInterface
-        fun saveQuality(index: Int) {
-            getSharedPreferences(PREFS, MODE_PRIVATE).edit().putInt(KEY_QUALITY, index).apply()
         }
 
         @JavascriptInterface

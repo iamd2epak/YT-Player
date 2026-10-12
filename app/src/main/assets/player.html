@@ -169,8 +169,7 @@
       <h4>Playback speed <span id="speedNow">1x</span></h4>
       <div class="opts" id="speedOpts"></div>
       <h4>Quality <span id="qualNow">Auto</span></h4>
-      <div class="opts" id="qualOpts"></div>
-      <div id="qNote">Higher quality uses more data. Auto adjusts to your connection.</div>
+      <div id="qNote">Quality is chosen automatically by YouTube based on your internet speed and screen size.</div>
     </div>
   </div>
 
@@ -187,16 +186,12 @@
   var TITLE = decodeURIComponent('{{TITLE}}');
   var SEEK_STEP = 10;
   var SPEEDS = [0.5, 0.75, 1, 1.25, 1.5, 1.75, 2];
-  // label, target video height in device pixels (0 = auto), legacy API name
-  var QUALITIES = [['Auto', 0, 'default'], ['1080p', 1080, 'hd1080'], ['720p', 720, 'hd720'],
-                   ['480p', 480, 'large'], ['360p', 360, 'medium'], ['240p', 240, 'small'],
-                   ['144p', 144, 'tiny']];
   var Q_NAMES = { hd2160: '2160p', hd1440: '1440p', hd1080: '1080p', hd720: '720p', large: '480p',
                   medium: '360p', small: '240p', tiny: '144p' };
 
   var Native = window.Android || {
     onProgress: function () {}, reload: function () { location.reload(); },
-    toggleFullscreen: function () {}, saveQuality: function () {}, getQuality: function () { return 0; }
+    toggleFullscreen: function () {}
   };
 
   var $ = function (id) { return document.getElementById(id); };
@@ -207,9 +202,7 @@
 
   var player = null, ready = false, playing = false, ended = false, dragging = false;
   var hideTimer = 0, tickTimer = 0, lastSaved = 0;
-  var speed = 1, quality = 0;
-  try { quality = Number(Native.getQuality()) || 0; } catch (e) {}
-  if (!(quality >= 0 && quality < QUALITIES.length)) quality = 0;
+  var speed = 1;
 
   // ---------- Hard-block anything that could leak the video link ----------
   ['contextmenu', 'selectstart', 'dragstart', 'copy', 'cut'].forEach(function (ev) {
@@ -221,26 +214,16 @@
   // YouTube draws its logo / title / badges at the edges of the *iframe*. We make the iframe
   // larger than the screen only along the side where the video has black bars, so the video
   // itself stays the same size while those edges (and YouTube's branding) fall off-screen.
-  // For a fixed quality we also render the iframe at the pixel size YouTube needs for that
-  // resolution and scale it with CSS (YouTube picks the stream by player size).
   var CROP = 0.22, MIN_CROP = 90;
   function layout() {
     var W = window.innerWidth, H = window.innerHeight;
     var bw = W, bh = H, x = 0, y = 0;
     if (W / H > 16 / 9) { var px = Math.max(MIN_CROP, W * CROP); bw = W + 2 * px; x = -px; }
     else { var py = Math.max(MIN_CROP, H * CROP); bh = H + 2 * py; y = -py; }
-
-    var k = 1;
-    var target = QUALITIES[quality][1];
-    if (target) {
-      var videoH = Math.min(H, W * 9 / 16) * (window.devicePixelRatio || 1);
-      k = Math.max(0.15, Math.min(4, target / videoH));
-    }
     box.style.left = x + 'px';
     box.style.top = y + 'px';
-    box.style.width = (bw * k) + 'px';
-    box.style.height = (bh * k) + 'px';
-    box.style.transform = k === 1 ? 'none' : 'scale(' + (1 / k) + ')';
+    box.style.width = bw + 'px';
+    box.style.height = bh + 'px';
   }
   layout();
   window.addEventListener('resize', function () { layout(); });
@@ -261,11 +244,10 @@
       iv_load_policy: 3, modestbranding: 1, cc_load_policy: 0, enablejsapi: 1,
       start: Math.floor(START_AT), origin: location.origin
     };
-    if (quality) vars.vq = QUALITIES[quality][2];
     player = new YT.Player('yt', {
       videoId: VIDEO_ID, width: '100%', height: '100%', playerVars: vars,
       events: { onReady: onReady, onStateChange: onState, onError: onError,
-                onPlaybackQualityChange: updateQualityLabel }
+                onPlaybackQualityChange: updateQualityLabel, onApiChange: captionsOff }
     });
   };
 
@@ -274,7 +256,7 @@
     clearTimeout(watchdog);
     $('loading').classList.add('hidden');
     player.getIframe().setAttribute('tabindex', '-1');
-    applyQuality(false);
+    captionsOff();
     player.playVideo();
     tick();
     showUi(true);
@@ -296,7 +278,7 @@
     $('playIcon').setAttribute('d', playing ? 'M6 19h4V5H6v14zm8-14v14h4V5h-4z'
       : ended ? 'M12 5V1L7 6l5 5V7c3.31 0 6 2.69 6 6s-2.69 6-6 6-6-2.69-6-6H4c0 4.42 3.58 8 8 8s8-3.58 8-8-3.58-8-8-8z'
       : 'M8 5v14l11-7z');
-    if (playing) { scheduleHide(); updateQualityLabel(); } else showUi(true);
+    if (playing) { captionsOff(); scheduleHide(); updateQualityLabel(); } else showUi(true);
   }
 
   function onError(e) {
@@ -383,32 +365,19 @@
     markSel('speedOpts', String(s));
   }
 
-  function applyQuality(seekToFlush) {
-    layout();
+  // Captions always off (also catches auto-generated captions YouTube turns on by itself).
+  function captionsOff() {
     if (!ready) return;
-    var name = QUALITIES[quality][2];
-    try { player.setPlaybackQuality(name); } catch (e) {}
-    // Re-seek to the current time so the player drops the old buffer and switches quickly.
-    if (seekToFlush) player.seekTo(cur(), true);
+    try { player.unloadModule('captions'); } catch (e) {}
+    try { player.unloadModule('cc'); } catch (e) {}
+    try { player.setOption('captions', 'track', {}); } catch (e) {}
   }
 
-  function setQuality(i) {
-    quality = i;
-    try { Native.saveQuality(i); } catch (e) {}
-    markSel('qualOpts', String(i));
-    applyQuality(true);
-    updateQualityLabel();
-  }
-
+  // YouTube embeds pick quality automatically; we only display what is playing.
   function updateQualityLabel() {
-    var label = QUALITIES[quality][0];
-    if (!quality && ready) {
-      var q = player.getPlaybackQuality && Q_NAMES[player.getPlaybackQuality()];
-      $('qualNow').textContent = q ? 'Auto (' + q + ')' : 'Auto';
-    } else {
-      $('qualNow').textContent = label;
-    }
-    $('qualVal').textContent = label === 'Auto' ? 'Auto' : label;
+    var q = ready && player.getPlaybackQuality ? Q_NAMES[player.getPlaybackQuality()] : '';
+    $('qualVal').textContent = q || 'Auto';
+    $('qualNow').textContent = q ? 'Auto (' + q + ')' : 'Auto';
   }
 
   function markSel(id, val) {
@@ -431,10 +400,7 @@
   }
   buildOpts('speedOpts', SPEEDS.map(function (s) { return { label: s === 1 ? 'Normal' : s + 'x', value: String(s) }; }),
     function (it) { setSpeed(Number(it.value)); toast('Speed ' + it.value + 'x'); });
-  buildOpts('qualOpts', QUALITIES.map(function (q, i) { return { label: q[0], value: String(i) }; }),
-    function (it) { setQuality(Number(it.value)); toast('Quality ' + QUALITIES[quality][0]); });
   markSel('speedOpts', '1');
-  markSel('qualOpts', String(quality));
   updateQualityLabel();
 
   var sheetBg = $('sheetBg');
