@@ -51,7 +51,7 @@ jobs:
           SIGNING_KEY_PASSWORD: ${{ secrets.SIGNING_KEY_PASSWORD }}
         run: |
           chmod +x gradlew
-          ./gradlew assembleRelease --no-daemon
+          ./gradlew assembleDebug --no-daemon
           cp app/build/outputs/apk/release/app-release.apk MuteAdTube.apk
           rm -f "$RUNNER_TEMP/release.jks"
 
