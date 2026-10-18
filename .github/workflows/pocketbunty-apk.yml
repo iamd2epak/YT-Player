@@ -66,7 +66,16 @@ jobs:
           gh release view pocketbunty-apk --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1 ||
             gh release create pocketbunty-apk --repo "$GITHUB_REPOSITORY" --prerelease --target "$GITHUB_SHA" \
               --title "Test APK (PocketBunty)" --notes "Test APK built by PocketBunty."
+          # Only the newest APK is kept: older ones are deleted, so they don't fill the repo's storage.
+          gh release view pocketbunty-apk --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[].name' |
+            while IFS= read -r old; do
+              [ -n "$old" ] && gh release delete-asset pocketbunty-apk "$old" --repo "$GITHUB_REPOSITORY" --yes
+            done
           gh release upload pocketbunty-apk "$RUNNER_TEMP/$name" --repo "$GITHUB_REPOSITORY" --clobber
+          # Older PocketBunty versions put APKs on a release "debug": remove it (only if it's that one).
+          if [ "$(gh release view debug --repo "$GITHUB_REPOSITORY" --json name --jq .name 2>/dev/null)" = "Debug APK (testing)" ]; then
+            gh release delete debug --repo "$GITHUB_REPOSITORY" --yes --cleanup-tag || true
+          fi
           gh release edit pocketbunty-apk --repo "$GITHUB_REPOSITORY" \
             --notes "Test (debug-signed) APK built by PocketBunty from $GITHUB_SHA on $GITHUB_REF_NAME. For testing only."
           url="https://github.com/$GITHUB_REPOSITORY/releases/download/pocketbunty-apk/$name"
