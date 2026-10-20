@@ -45,6 +45,8 @@ import android.widget.ScrollView
 import android.widget.TextView
 import android.widget.Toast
 import androidx.annotation.OptIn
+import androidx.media3.common.Player
+import androidx.media3.common.VideoSize
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
@@ -95,6 +97,8 @@ class PlayerActivity : Activity() {
     private var title = ""
     private var mode = "native"
     private var fullscreen = false
+    private var verticalVideo = false   // portrait-shaped video (e.g. shorts, phone recordings)
+    private var portraitFull = false    // vertical video shown fullscreen without rotating
     private var pageReady = false
     @Volatile private var pageHtml = ""
     private var pendingMessage: String? = null   // status/error raised before the page finished loading
@@ -224,7 +228,7 @@ class PlayerActivity : Activity() {
         }
         root.setOnApplyWindowInsetsListener { v, insets ->
             // Keep the portrait player below the status bar; landscape uses the whole screen.
-            if (isLandscape()) v.setPadding(0, 0, 0, 0)
+            if (isFull()) v.setPadding(0, 0, 0, 0)
             else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
                 val bars = insets.getInsets(WindowInsets.Type.systemBars())
                 v.setPadding(0, bars.top, 0, bars.bottom)
@@ -250,11 +254,14 @@ class PlayerActivity : Activity() {
 
     private fun isLandscape() = resources.configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
 
+    /** Fullscreen layout: landscape, or a vertical video filling the portrait screen. */
+    private fun isFull() = isLandscape() || portraitFull
+
     private fun applyLayout() {
-        val landscape = isLandscape()
-        fullscreen = landscape
+        val full = isFull()
+        fullscreen = full
         val lp = playerBox.layoutParams as LinearLayout.LayoutParams
-        if (landscape) {
+        if (full) {
             lp.height = ViewGroup.LayoutParams.MATCH_PARENT
             lp.weight = 1f
             toolbar.visibility = View.GONE
@@ -299,6 +306,9 @@ class PlayerActivity : Activity() {
             override fun onSaveProgress(positionSec: Double, durationSec: Double) = saveProgress(positionSec, durationSec)
             override fun onFallbackToEmbed(positionSec: Double) = switchToEmbed(positionSec)
         }, directUri).also { it.start(savedPosition()) }
+        stream?.player?.addListener(object : Player.Listener {
+            override fun onVideoSizeChanged(size: VideoSize) = onVideoShape(size)
+        })
     }
 
     /** Last resort: YouTube's own player inside the same page/controls. */
@@ -372,10 +382,25 @@ class PlayerActivity : Activity() {
     }
 
     private fun setFullscreen(on: Boolean) {
-        fullscreen = on
-        requestedOrientation = if (on) ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+        // Vertical videos go fullscreen in portrait; others rotate to landscape.
+        portraitFull = on && verticalVideo
+        requestedOrientation = if (on && !verticalVideo) ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
         else ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+        // No rotation happens when staying in portrait, so relayout now; otherwise onConfigurationChanged does it.
+        if (!isLandscape()) applyLayout() else fullscreen = on
         js("window.setFullscreenIcon&&setFullscreenIcon($on)")
+    }
+
+    /** Learn the video's shape; if fullscreen was opened in landscape for a vertical video, switch to portrait. */
+    private fun onVideoShape(size: VideoSize) {
+        if (size.width <= 0 || size.height <= 0) return
+        val rotated = size.unappliedRotationDegrees % 180 != 0
+        val w = size.width * size.pixelWidthHeightRatio
+        val h = size.height.toFloat()
+        val vertical = if (rotated) w > h else h > w
+        if (vertical == verticalVideo) return
+        verticalVideo = vertical
+        if (fullscreen) setFullscreen(true)
     }
 
     override fun onConfigurationChanged(newConfig: Configuration) {
@@ -387,7 +412,7 @@ class PlayerActivity : Activity() {
     /** Immersive (no status/nav bars) only in fullscreen landscape. */
     @Suppress("DEPRECATION")
     private fun applySystemUi() {
-        val immersive = isLandscape()
+        val immersive = isFull()
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
             window.setDecorFitsSystemWindows(false)
             window.insetsController?.let {
