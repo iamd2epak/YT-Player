@@ -13,3 +13,6 @@ captures/
 .env
 *.p12
 keystore.properties
+
+# Firebase config (kept by the user, like the keystore)
+app/google-services.json
