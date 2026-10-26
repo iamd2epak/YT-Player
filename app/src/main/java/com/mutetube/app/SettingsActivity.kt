@@ -61,13 +61,19 @@ class SettingsActivity : Activity() {
 
         section(column, "Data")
         column.addView(row("Clear history", "Remove all videos from your history") { confirmClear() })
+        lateinit var reports: LinearLayout
+        reports = row("Usage & crash reports", reportsText()) {
+            Telemetry.setEnabled(this, !Telemetry.isEnabled(this))
+            (reports.getChildAt(1) as TextView).text = reportsText()
+        }
+        column.addView(reports)
 
         section(column, "Spread the word")
-        column.addView(row("Share app", "Send the app link to friends") { AppShare.share(this) })
-        column.addView(row("Rate the app", "A quick rating helps a lot") { AppShare.rate(this) })
+        column.addView(row("Share app", "Send the app link to friends") { AppShare.share(this); Telemetry.event(this, "share_app", "from" to "settings") })
+        column.addView(row("Rate the app", "A quick rating helps a lot") { AppShare.rate(this); Telemetry.event(this, "rate_app") })
 
         section(column, "About")
-        column.addView(row("Privacy policy", "What data the app uses (none is collected)") { openUrl(PRIVACY_URL) })
+        column.addView(row("Privacy policy", "What data the app uses") { openUrl(PRIVACY_URL) })
         column.addView(row("Terms of use", "Rules for using this app") { openUrl(TERMS_URL) })
         column.addView(row("Contact & feedback", CONTACT_EMAIL) { email() })
         column.addView(row("Open-source licenses", "Libraries used by this app") { licenses() })
@@ -80,6 +86,10 @@ class SettingsActivity : Activity() {
             addView(column)
         })
     }
+
+    private fun reportsText() = if (Telemetry.isEnabled(this))
+        "On · Anonymous feature usage and crash reports help fix bugs. Tap to turn off."
+    else "Off · Tap to turn on"
 
     private fun section(column: LinearLayout, title: String) = column.addView(TextView(this).apply {
         text = title

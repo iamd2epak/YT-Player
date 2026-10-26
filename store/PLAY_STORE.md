@@ -35,7 +35,11 @@
 - **Content rating:** Category "Utility/Productivity/Communication/Other" → answer No to all → rated Everyone/3+.
 - **Target audience:** 18+ (do not select children's age groups).
 - **News app:** No. **Government app:** No. **Financial features:** None. **Health:** No.
-- **Data safety:** "Does your app collect or share user data?" → **No**. Encrypted in transit → Yes. Account deletion → not applicable (no accounts).
+- **Data safety** (Firebase Analytics + Crashlytics):
+  - Collects data → **Yes**. Shares data → **No** (Google processes it as a service provider). Encrypted in transit → **Yes**. Users can request deletion → **Yes** (by email). Account deletion → not applicable (no accounts).
+  - **App activity → App interactions**: collected, not shared, optional (Settings toggle), purpose *Analytics*.
+  - **App info and performance → Crash logs, Diagnostics**: collected, not shared, optional, purpose *Analytics*.
+  - **Device or other IDs**: collected, not shared, optional, purpose *Analytics*.
 - **Foreground service permissions:** declare
   - *Media playback* — "Background play: video/audio keeps playing with controls in the notification when the user leaves the app."
   - *Data sync* — "User-started video downloads continue with a progress notification until finished."

@@ -1,11 +1,20 @@
 # Privacy Policy — MuteAd Tube
 
-_Last updated: October 12, 2026_
+_Last updated: October 26, 2026_
 
-MuteAd Tube ("the app") is a simple video player developed by iamd2epak. This policy explains what the app does with your information. **In short: the app does not collect, store on any server, or share any personal data.**
+MuteAd Tube ("the app") is a simple video player developed by iamd2epak. This policy explains what the app does with your information. **In short: the app has no accounts and never collects what you watch. It only sends anonymous feature-usage and crash reports, which you can turn off.**
 
 ## Data we collect
-**None.** The app has no account system, no analytics, no advertising SDKs and no crash-reporting services. The developer does not receive any information about you or how you use the app.
+The app uses **Google Firebase Analytics** and **Firebase Crashlytics** to understand which features are used and to fix crashes:
+- **App activity** — anonymous events such as "a video was played", "a download started", "background play turned on" or "app shared". Video titles, links and file names are **never** sent.
+- **Crash and diagnostic data** — crash reports, error messages, device model, Android version and app version.
+- **Identifiers** — a random app-instance ID created by Firebase. It is not linked to your name, email or any account.
+
+This data is processed by Google on the developer's behalf ([Firebase privacy](https://firebase.google.com/support/privacy)), sent encrypted, and used only to improve the app. It is not sold or used for advertising.
+
+**Turn it off any time:** Settings → *Usage & crash reports*. To ask for deletion of data linked to your app-instance ID, email the address below.
+
+The app has no account system and no advertising SDKs.
 
 ## Data stored on your device
 - **History** — titles, links and thumbnails of videos you opened, so you can reopen them. It stays on your device only. You can remove items or clear it any time (Home → Clear all, or Settings → Clear history). It is deleted when you uninstall the app.

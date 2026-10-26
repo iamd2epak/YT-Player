@@ -148,6 +148,11 @@ class PlayerActivity : Activity() {
         title = intent.getStringExtra(EXTRA_TITLE).orEmpty().ifBlank { History.title(this, id) }
             .ifBlank { directUri?.let { displayName(it) }.orEmpty() }
         History.put(this, id, title, uri = directUri?.toString().orEmpty())
+        if (savedInstanceState == null) {
+            ReviewPrompt.onVideoPlayed(this)
+            val source = when (directUri?.scheme) { null -> "online"; "http", "https" -> "link"; else -> "file" }
+            Telemetry.event(this, "video_play", "source" to source)
+        }
 
         playerView = PlayerView(this).apply {
             useController = false
@@ -299,6 +304,7 @@ class PlayerActivity : Activity() {
             override fun onStatus(text: String) = jsOrQueue("window.nativeStatus&&nativeStatus(${JSONObject.quote(text)})")
             override fun onState(json: String) = js("window.nativeState&&nativeState($json)")
             override fun onError(message: String) {
+                Telemetry.log(this@PlayerActivity, "Playback error: $message")
                 jsOrQueue("window.nativeError&&nativeError(${JSONObject.quote(message)})")
                 fetchMetaFallback()
             }
@@ -313,6 +319,7 @@ class PlayerActivity : Activity() {
 
     /** Last resort: YouTube's own player inside the same page/controls. */
     private fun switchToEmbed(positionSec: Double) {
+        Telemetry.event(this, "fallback_player")
         if (bgOn) PlaybackService.stop(this, stream?.player)
         bgOn = false
         renderBgButton()
@@ -684,7 +691,10 @@ class PlayerActivity : Activity() {
             setPadding(dp(12), 0, dp(14), 0)
             background = ripple(rounded(ACCENT, 18), rounded("#FFFFFF", 18))
             isClickable = true
-            setOnClickListener { AppShare.share(this@PlayerActivity) }
+            setOnClickListener {
+                AppShare.share(this@PlayerActivity)
+                Telemetry.event(this@PlayerActivity, "share_app", "from" to "player")
+            }
             addView(ImageView(this@PlayerActivity).apply {
                 setImageResource(R.drawable.ic_share)
                 imageTintList = ColorStateList.valueOf(Color.WHITE)
@@ -786,6 +796,7 @@ class PlayerActivity : Activity() {
                 PlaybackService.directUri = directUri
                 PlaybackService.start(this, s.player, videoId, title, channel)
                 toast("Background play on. Leave the app or lock the screen, it keeps playing.")
+                Telemetry.event(this, "background_play")
             } catch (_: Exception) {
                 bgOn = false
                 toast("Couldn't turn on background play")
@@ -868,6 +879,7 @@ class PlayerActivity : Activity() {
             return toast("Couldn't start the download. Try again.")
         }
         toast("Downloading ${option.label}")
+        Telemetry.event(this, "download_start", "type" to if (option.audioOnly) "audio" else "video")
         renderCard(job)
     }
 

@@ -87,7 +87,10 @@ class MainActivity : Activity() {
                 background = RippleDrawable(ColorStateList.valueOf(Color.parseColor("#33FFFFFF")), pill, null)
                 isClickable = true
                 contentDescription = "Share app"
-                setOnClickListener { AppShare.share(this@MainActivity) }
+                setOnClickListener {
+                    AppShare.share(this@MainActivity)
+                    Telemetry.event(this@MainActivity, "share_app", "from" to "home")
+                }
                 addView(ImageView(this@MainActivity).apply {
                     setImageResource(R.drawable.ic_share)
                     imageTintList = ColorStateList.valueOf(Color.parseColor("#B9A8FF"))
@@ -218,6 +221,7 @@ class MainActivity : Activity() {
         super.onResume()
         renderHistory()
         updater.resume()
+        ReviewPrompt.maybeAsk(this)
     }
 
     override fun onDestroy() {

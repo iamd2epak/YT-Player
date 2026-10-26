@@ -1,0 +1,10 @@
+package com.mutetube.app
+
+import android.app.Application
+
+class App : Application() {
+    override fun onCreate() {
+        super.onCreate()
+        Telemetry.init(this)
+    }
+}
