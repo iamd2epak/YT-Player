@@ -46,6 +46,8 @@ class MainActivity : Activity() {
     private lateinit var historyList: LinearLayout
     private lateinit var clearAll: TextView
     private lateinit var empty: TextView
+    private lateinit var linkInput: EditText
+    private var lastAutoPasted = ""   // don't refill a link the user already cleared
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -120,6 +122,7 @@ class MainActivity : Activity() {
             setPadding(dp(14), dp(12), dp(14), dp(12))
             background = rounded(CARD)
         }
+        linkInput = input
         val paste = button("Paste", "#3A3A50") {
             val clip = getSystemService(ClipboardManager::class.java)?.primaryClip
             val text = clip?.takeIf { it.itemCount > 0 }?.getItemAt(0)?.coerceToText(this)?.toString().orEmpty()
@@ -186,6 +189,29 @@ class MainActivity : Activity() {
     override fun onResume() {
         super.onResume()
         renderHistory()
+    }
+
+    // Android 10+ only lets an app read the clipboard while it has focus.
+    override fun onWindowFocusChanged(hasFocus: Boolean) {
+        super.onWindowFocusChanged(hasFocus)
+        if (hasFocus) autoPasteLink()
+    }
+
+    /** Fills the empty link box with a copied video link. */
+    private fun autoPasteLink() {
+        if (!::linkInput.isInitialized || linkInput.text.isNotBlank()) return
+        val cm = getSystemService(ClipboardManager::class.java) ?: return
+        // Check the type first: reading the clip itself shows Android's "pasted" notice.
+        val desc = cm.primaryClipDescription ?: return
+        if (!desc.hasMimeType("text/*")) return
+        val text = try {
+            cm.primaryClip?.takeIf { it.itemCount > 0 }?.getItemAt(0)?.text?.toString().orEmpty()
+        } catch (_: Exception) { return }
+        val url = Regex("https?://\\S+", RegexOption.IGNORE_CASE).find(text)?.value ?: return
+        if (url == lastAutoPasted || YouTubeId.parse(url) == null) return
+        lastAutoPasted = url
+        linkInput.setText(url)
+        linkInput.setSelection(url.length)
     }
 
     private fun renderHistory() {
