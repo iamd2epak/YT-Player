@@ -20,8 +20,8 @@ android {
         minSdk = 24
         targetSdk = 36
         // Bump both for every Play Store upload (versionCode must always increase).
-        versionCode = 4
-        versionName = "1.0.3"
+        versionCode = 5
+        versionName = "1.1.0"
     }
 
     // Release (upload) key: env vars (GitHub secrets) or a local, gitignored keystore.properties.
