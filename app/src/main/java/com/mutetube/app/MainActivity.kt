@@ -73,15 +73,41 @@ class MainActivity : Activity() {
             gravity = Gravity.CENTER_VERTICAL
             setPadding(0, dp(4), 0, 0)
             addView(brand, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+            // Share pill: violet tint so it stands out without shouting.
+            addView(LinearLayout(this@MainActivity).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER_VERTICAL
+                setPadding(dp(12), 0, dp(14), 0)
+                val pill = GradientDrawable().apply {
+                    cornerRadius = dp(20).toFloat()
+                    setColor(Color.parseColor("#2C2550"))
+                    setStroke(dp(1), Color.parseColor("#4D7C5CFF"))
+                }
+                background = RippleDrawable(ColorStateList.valueOf(Color.parseColor("#33FFFFFF")), pill, null)
+                isClickable = true
+                contentDescription = "Share app"
+                setOnClickListener { AppShare.share(this@MainActivity) }
+                addView(ImageView(this@MainActivity).apply {
+                    setImageResource(R.drawable.ic_share)
+                    imageTintList = ColorStateList.valueOf(Color.parseColor("#B9A8FF"))
+                }, LinearLayout.LayoutParams(dp(18), dp(18)).apply { marginEnd = dp(6) })
+                addView(TextView(this@MainActivity).apply {
+                    text = "Share"
+                    setTextColor(Color.parseColor("#D8CEFF"))
+                    setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
+                    typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
+                })
+            }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, dp(38)).apply { marginEnd = dp(6) })
             addView(ImageView(this@MainActivity).apply {
                 setImageResource(R.drawable.ic_settings)
                 imageTintList = ColorStateList.valueOf(Color.parseColor("#CCCCDD"))
-                scaleType = ImageView.ScaleType.CENTER
+                scaleType = ImageView.ScaleType.FIT_CENTER
+                setPadding(dp(11), dp(11), dp(11), dp(11)) // 28dp icon (15% larger than before)
                 contentDescription = "Settings"
                 background = RippleDrawable(ColorStateList.valueOf(Color.parseColor("#33FFFFFF")), null,
                     GradientDrawable().apply { shape = GradientDrawable.OVAL; setColor(Color.WHITE) })
                 setOnClickListener { start(Intent(this@MainActivity, SettingsActivity::class.java)) }
-            }, LinearLayout.LayoutParams(dp(44), dp(44)))
+            }, LinearLayout.LayoutParams(dp(50), dp(50)))
         })
         column.addView(TextView(this).apply {
             text = "Simple, ad-free video player. Open a video, paste a link, or share one to this app."

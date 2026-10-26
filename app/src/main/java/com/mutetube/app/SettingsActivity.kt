@@ -62,6 +62,10 @@ class SettingsActivity : Activity() {
         section(column, "Data")
         column.addView(row("Clear history", "Remove all videos from your history") { confirmClear() })
 
+        section(column, "Spread the word")
+        column.addView(row("Share app", "Send the app link to friends") { AppShare.share(this) })
+        column.addView(row("Rate the app", "A quick rating helps a lot") { AppShare.rate(this) })
+
         section(column, "About")
         column.addView(row("Privacy policy", "What data the app uses (none is collected)") { openUrl(PRIVACY_URL) })
         column.addView(row("Terms of use", "Rules for using this app") { openUrl(TERMS_URL) })

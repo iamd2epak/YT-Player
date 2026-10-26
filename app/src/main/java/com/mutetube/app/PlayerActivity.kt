@@ -653,6 +653,7 @@ class PlayerActivity : Activity() {
             addView(View(this@PlayerActivity).apply { setBackgroundColor(Color.parseColor("#262626")) },
                 LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(1)).apply { topMargin = dp(20) })
             addView(tip, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = dp(14) })
+            addView(buildShareCard(), LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = dp(20) })
         }
         return ScrollView(this).apply {
             setBackgroundColor(Color.parseColor(BG))
@@ -660,6 +661,41 @@ class PlayerActivity : Activity() {
             overScrollMode = View.OVER_SCROLL_NEVER
             addView(column)
         }
+    }
+
+    /** Small highlighted "share the app" card at the bottom of the details. */
+    private fun buildShareCard() = LinearLayout(this).apply {
+        orientation = LinearLayout.HORIZONTAL
+        gravity = Gravity.CENTER_VERTICAL
+        setPadding(dp(14), dp(12), dp(12), dp(12))
+        background = GradientDrawable().apply {
+            cornerRadius = dp(14).toFloat()
+            setColor(Color.parseColor("#1F1A36"))
+            setStroke(dp(1), Color.parseColor("#4D7C5CFF"))
+        }
+        addView(TextView(this@PlayerActivity).apply {
+            text = "Enjoying the app? Share it with friends"
+            setTextColor(Color.parseColor("#D8CEFF"))
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
+        }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply { marginEnd = dp(10) })
+        addView(LinearLayout(this@PlayerActivity).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(dp(12), 0, dp(14), 0)
+            background = ripple(rounded(ACCENT, 18), rounded("#FFFFFF", 18))
+            isClickable = true
+            setOnClickListener { AppShare.share(this@PlayerActivity) }
+            addView(ImageView(this@PlayerActivity).apply {
+                setImageResource(R.drawable.ic_share)
+                imageTintList = ColorStateList.valueOf(Color.WHITE)
+            }, LinearLayout.LayoutParams(dp(16), dp(16)).apply { marginEnd = dp(6) })
+            addView(TextView(this@PlayerActivity).apply {
+                text = "Share"
+                setTextColor(Color.WHITE)
+                setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
+                typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
+            })
+        }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, dp(36)))
     }
 
     // ------------------------------------------------------------------ video details
