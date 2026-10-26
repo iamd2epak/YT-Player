@@ -66,5 +66,8 @@ dependencies {
     implementation("androidx.media3:media3-ui:1.4.1")
     implementation("androidx.media3:media3-session:1.4.1") // background play notification
 
+    // Play Store in-app updates.
+    implementation("com.google.android.play:app-update:2.1.0")
+
     coreLibraryDesugaring("com.android.tools:desugar_jdk_libs_nio:2.0.4")
 }

@@ -47,6 +47,7 @@ class MainActivity : Activity() {
     private lateinit var clearAll: TextView
     private lateinit var empty: TextView
     private lateinit var linkInput: EditText
+    private lateinit var updater: AppUpdater
     private var lastAutoPasted = ""   // don't refill a link the user already cleared
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -210,11 +211,18 @@ class MainActivity : Activity() {
             fitsSystemWindows = true // keep content clear of status/nav bars (Android 15 edge-to-edge)
             addView(column)
         })
+        updater = AppUpdater(this).also { it.check() }
     }
 
     override fun onResume() {
         super.onResume()
         renderHistory()
+        updater.resume()
+    }
+
+    override fun onDestroy() {
+        if (::updater.isInitialized) updater.release()
+        super.onDestroy()
     }
 
     // Android 10+ only lets an app read the clipboard while it has focus.
